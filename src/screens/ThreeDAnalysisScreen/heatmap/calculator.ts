@@ -1,25 +1,13 @@
 import * as SunCalc from "suncalc";
-
-export const METERS_PER_DEG = 111320;
-export const AVG_BUILDING_HEIGHT_M = 15;
-
-export type SurfacePatch = {
-  id: string;
-  type: "roof" | "wall";
-  wallDir?: "north" | "south" | "east" | "west";
-  geometry: any; // GeoJSON Polygon
-  baseHeight: number;
-  topHeight: number;
-  hours: number;
-  color: string;
-};
-
-export type NearbyBuilding = {
-  lat: number;
-  lng: number;
-  height: number;
-  baseHeight: number;
-};
+import {
+  METERS_PER_DEG,
+  type SurfacePatch,
+  type NearbyBuilding,
+  type HeatmapResult,
+  type SunStep,
+  type RoofPatch,
+  type WallSegment,
+} from "./types";
 
 export function sunlightColor(hours: number): string {
   if (hours < 1) return "#3B82F6";
@@ -46,6 +34,17 @@ export function polygonRings(geometry: any): number[][][] {
   return [];
 }
 
+function centroidOfCoords(coords: number[][]): [number, number] | null {
+  if (!coords || coords.length === 0) return null;
+  let sumLng = 0;
+  let sumLat = 0;
+  for (const c of coords) {
+    sumLng += c[0];
+    sumLat += c[1];
+  }
+  return [sumLng / coords.length, sumLat / coords.length];
+}
+
 export function buildingCentroid(geometry: any): [number, number] | null {
   if (!geometry) return null;
   if (geometry.type === "Polygon") {
@@ -63,17 +62,6 @@ export function buildingCentroid(geometry: any): [number, number] | null {
     return centroidOfCoords(largest);
   }
   return null;
-}
-
-function centroidOfCoords(coords: number[][]): [number, number] | null {
-  if (!coords || coords.length === 0) return null;
-  let sumLng = 0;
-  let sumLat = 0;
-  for (const c of coords) {
-    sumLng += c[0];
-    sumLat += c[1];
-  }
-  return [sumLng / coords.length, sumLat / coords.length];
 }
 
 export function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
@@ -102,31 +90,6 @@ export function pointInGeometry(lng: number, lat: number, geometry: any): boolea
   return pointInPolygon(lng, lat, rings);
 }
 
-function gridPointsInPolygon(geometry: any, spacingMeters: number): [number, number][] {
-  const rings = polygonRings(geometry);
-  if (rings.length === 0) return [];
-  const outer = rings[0];
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [x, y] of outer) {
-    if (x < minLng) minLng = x;
-    if (x > maxLng) maxLng = x;
-    if (y < minLat) minLat = y;
-    if (y > maxLat) maxLat = y;
-  }
-  const midLat = (minLat + maxLat) / 2;
-  const latStep = spacingMeters / METERS_PER_DEG;
-  const lngStep = spacingMeters / (METERS_PER_DEG * Math.cos(midLat * Math.PI / 180));
-  const points: [number, number][] = [];
-  for (let lat = minLat + latStep / 2; lat < maxLat; lat += latStep) {
-    for (let lng = minLng + lngStep / 2; lng < maxLng; lng += lngStep) {
-      if (pointInPolygon(lng, lat, rings)) {
-        points.push([lng, lat]);
-      }
-    }
-  }
-  return points;
-}
-
 function offsetPoint(lng: number, lat: number, dxMeters: number, dyMeters: number): [number, number] {
   const latRad = lat * Math.PI / 180;
   return [
@@ -135,7 +98,7 @@ function offsetPoint(lng: number, lat: number, dxMeters: number, dyMeters: numbe
   ];
 }
 
-function subdivideRoof(geometry: any, spacingMeters: number): { geometry: any; center: [number, number] }[] {
+function subdivideRoof(geometry: any, spacingMeters: number): RoofPatch[] {
   const rings = polygonRings(geometry);
   if (rings.length === 0) return [];
   const outer = rings[0];
@@ -150,7 +113,7 @@ function subdivideRoof(geometry: any, spacingMeters: number): { geometry: any; c
   const latStep = spacingMeters / METERS_PER_DEG;
   const lngStep = spacingMeters / (METERS_PER_DEG * Math.cos(midLat * Math.PI / 180));
 
-  const patches: { geometry: any; center: [number, number] }[] = [];
+  const patches: RoofPatch[] = [];
   for (let lat = minLat + latStep / 2; lat < maxLat; lat += latStep) {
     for (let lng = minLng + lngStep / 2; lng < maxLng; lng += lngStep) {
       if (pointInPolygon(lng, lat, rings)) {
@@ -173,21 +136,11 @@ function subdivideRoof(geometry: any, spacingMeters: number): { geometry: any; c
   return patches;
 }
 
-function getWallSegments(geometry: any, buildingHeight: number, baseHeight: number, segmentLengthMeters: number): {
-  wallDir: "north" | "south" | "east" | "west";
-  centerLng: number;
-  centerLat: number;
-  segment: [number, number][];
-}[] {
+function getWallSegments(geometry: any, segmentLengthMeters: number): WallSegment[] {
   const rings = polygonRings(geometry);
   if (rings.length === 0) return [];
   const outer = rings[0];
-  const segments: {
-    wallDir: "north" | "south" | "east" | "west";
-    centerLng: number;
-    centerLat: number;
-    segment: [number, number][];
-  }[] = [];
+  const segments: WallSegment[] = [];
 
   for (let i = 0; i < outer.length - 1; i++) {
     const [lng1, lat1] = outer[i];
@@ -221,7 +174,7 @@ function getWallSegments(geometry: any, buildingHeight: number, baseHeight: numb
       const normalX = -segDyN;
       const normalY = segDxN;
 
-      let wallDir: "north" | "south" | "east" | "west";
+      let wallDir: WallSegment["wallDir"];
       if (Math.abs(normalY) > Math.abs(normalX)) {
         wallDir = normalY > 0 ? "north" : "south";
       } else {
@@ -272,7 +225,6 @@ function isWallSegmentShadowed(
   wallNormalY: number,
   sunDirX: number,
   sunDirY: number,
-  sunAltRad: number,
   tanAlt: number,
   nearby: NearbyBuilding[],
 ): boolean {
@@ -295,10 +247,33 @@ function isWallSegmentShadowed(
   return false;
 }
 
-export type HeatmapResult = {
-  patches: SurfacePatch[];
-  avgHours: number;
-};
+function precomputeSunSteps(
+  sunriseMs: number,
+  sunsetMs: number,
+  totalSteps: number,
+  buildingCenterLat: number,
+  buildingCenterLng: number,
+): SunStep[] {
+  const sunSteps: SunStep[] = [];
+  for (let i = 0; i <= totalSteps; i++) {
+    const stepTime = new Date(sunriseMs + (i / totalSteps) * (sunsetMs - sunriseMs));
+    const pos = SunCalc.getPosition(stepTime, buildingCenterLat, buildingCenterLng);
+    if (pos.altitude <= 0) {
+      sunSteps.push({ altRad: 0, azRad: 0, tanAlt: 0, sunDirX: 0, sunDirY: 0 });
+    } else {
+      const altRad = pos.altitude * Math.PI / 180;
+      const azRad = pos.azimuth * Math.PI / 180;
+      sunSteps.push({
+        altRad,
+        azRad,
+        tanAlt: Math.tan(altRad),
+        sunDirX: Math.sin(azRad),
+        sunDirY: Math.cos(azRad),
+      });
+    }
+  }
+  return sunSteps;
+}
 
 export function calculate3DHeatmap(
   buildingGeometry: any,
@@ -324,24 +299,7 @@ export function calculate3DHeatmap(
   const totalSteps = Math.ceil((sunsetMs - sunriseMs) / (1000 * 60 * STEP_MIN));
   const dayLengthHours = (sunsetMs - sunriseMs) / (1000 * 60 * 60);
 
-  const sunSteps: { altRad: number; azRad: number; tanAlt: number; sunDirX: number; sunDirY: number }[] = [];
-  for (let i = 0; i <= totalSteps; i++) {
-    const stepTime = new Date(sunriseMs + (i / totalSteps) * (sunsetMs - sunriseMs));
-    const pos = SunCalc.getPosition(stepTime, buildingCenterLat, buildingCenterLng);
-    if (pos.altitude <= 0) {
-      sunSteps.push({ altRad: 0, azRad: 0, tanAlt: 0, sunDirX: 0, sunDirY: 0 });
-    } else {
-      const altRad = pos.altitude * Math.PI / 180;
-      const azRad = pos.azimuth * Math.PI / 180;
-      sunSteps.push({
-        altRad,
-        azRad,
-        tanAlt: Math.tan(altRad),
-        sunDirX: Math.sin(azRad),
-        sunDirY: Math.cos(azRad),
-      });
-    }
-  }
+  const sunSteps = precomputeSunSteps(sunriseMs, sunsetMs, totalSteps, buildingCenterLat, buildingCenterLng);
 
   const patches: SurfacePatch[] = [];
   let totalHours = 0;
@@ -374,7 +332,7 @@ export function calculate3DHeatmap(
     });
   }
 
-  const wallSegs = getWallSegments(buildingGeometry, buildingHeight, buildingBaseHeight, wallSegmentSize);
+  const wallSegs = getWallSegments(buildingGeometry, wallSegmentSize);
   for (let w = 0; w < wallSegs.length; w++) {
     const ws = wallSegs[w];
     let normalX = 0, normalY = 0;
@@ -391,7 +349,7 @@ export function calculate3DHeatmap(
       const blocked = isWallSegmentShadowed(
         ws.centerLng, ws.centerLat, wallMidHeight,
         normalX, normalY,
-        ss.sunDirX, ss.sunDirY, ss.altRad, ss.tanAlt,
+        ss.sunDirX, ss.sunDirY, ss.tanAlt,
         nearbyBuildings,
       );
       if (!blocked) litSteps++;
@@ -427,4 +385,44 @@ export function calculate3DHeatmap(
     patches,
     avgHours: patchCount > 0 ? Math.round((totalHours / patchCount) * 10) / 10 : 0,
   };
+}
+
+export function queryNearbyBuildings(
+  map: any,
+  centerLng: number,
+  centerLat: number,
+): NearbyBuilding[] {
+  const nearbyBuildings: NearbyBuilding[] = [];
+  if (!map || !map.getLayer("3d-buildings")) return nearbyBuildings;
+
+  try {
+    const centerPoint = map.project([centerLng, centerLat]);
+    const features = map.queryRenderedFeatures(
+      [
+        [centerPoint.x - 300, centerPoint.y - 300],
+        [centerPoint.x + 300, centerPoint.y + 300],
+      ],
+      { layers: ["3d-buildings"] }
+    );
+    const seen = new Set<string | number>();
+    for (const f of features) {
+      const fid = f.id ?? f.properties?.id ?? f.properties?.osm_id;
+      if (fid !== undefined && seen.has(fid)) continue;
+      if (fid !== undefined) seen.add(fid);
+      const c = buildingCentroid(f.geometry);
+      if (!c) continue;
+      const h = Number(f.properties?.render_height ?? f.properties?.height ?? 15) || 15;
+      const bh = Number(f.properties?.render_min_height ?? f.properties?.min_height ?? 0) || 0;
+      const distM = Math.sqrt(
+        Math.pow((c[0] - centerLng) * METERS_PER_DEG * Math.cos(centerLat * Math.PI / 180), 2) +
+        Math.pow((c[1] - centerLat) * METERS_PER_DEG, 2)
+      );
+      if (distM < 5) continue;
+      nearbyBuildings.push({ lat: c[1], lng: c[0], height: h, baseHeight: bh });
+    }
+  } catch (e) {
+    console.warn("Failed to query nearby buildings:", e);
+  }
+
+  return nearbyBuildings;
 }

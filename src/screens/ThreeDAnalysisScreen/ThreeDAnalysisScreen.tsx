@@ -7,15 +7,13 @@ import { Button } from "../../components/ui/button";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 import {
-  calculate3DHeatmap,
   buildingCentroid,
   pointInGeometry,
   polygonRings,
-  METERS_PER_DEG,
-  AVG_BUILDING_HEIGHT_M,
-  type SurfacePatch,
-  type NearbyBuilding,
-} from "../../utils/heatmap3d";
+} from "./heatmap/calculator";
+import { useHeatmap } from "./heatmap/useHeatmap";
+import { METERS_PER_DEG, AVG_BUILDING_HEIGHT_M } from "./heatmap/types";
+import type { FocusedBuilding } from "./heatmap/types";
 import {
   isValidDate,
   toDateInputValue,
@@ -56,15 +54,6 @@ const SEASONAL_PRESETS: SeasonalPreset[] = [
   { labelKey: "analysis.winterSolstice" as TranslationKey, month: 12, day: 21, color: "#3B82F6" },
   { labelKey: "analysis.equinox" as TranslationKey, month: 3, day: 21, color: "#F59E0B" },
 ];
-
-type FocusedBuilding = {
-  id: string | number;
-  lat: number;
-  lng: number;
-  height: number;
-  baseHeight: number;
-  geometry: any;
-} | null;
 
 function deduplicateFeatures(features: any[], tapLng: number, tapLat: number): any | null {
   const candidates: { feature: any; area: number; containsTap: boolean; distToCentroid: number }[] = [];
@@ -122,8 +111,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const [viewVersion, setViewVersion] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
   const [focusedBuilding, setFocusedBuilding] = useState<FocusedBuilding>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [heatmapPatches, setHeatmapPatches] = useState<SurfacePatch[]>([]);
+  const { heatmapPatches, analyzing, clearHeatmap } = useHeatmap(focusedBuilding, selectedDate, hasCoords, mapRef);
 
   const rawLat = searchParams.get("lat") ?? sessionStorage.getItem("siteLat");
   const rawLng = searchParams.get("lng") ?? sessionStorage.getItem("siteLng");
@@ -624,64 +612,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     }
   }, [sunPosition, sunVisible, mapReady, lat]);
 
-  // Calculate 3D heatmap patches (roof + walls)
-  useEffect(() => {
-    if (!focusedBuilding || !hasCoords) {
-      setHeatmapPatches([]);
-      setAnalyzing(false);
-      return;
-    }
-    setAnalyzing(true);
-    const map = mapRef.current;
-    const calc = () => {
-      const nearbyBuildings: NearbyBuilding[] = [];
-      if (map && map.getLayer("3d-buildings")) {
-        try {
-          const centerPoint = map.project([focusedBuilding.lng, focusedBuilding.lat]);
-          const features = map.queryRenderedFeatures(
-            [
-              [centerPoint.x - 300, centerPoint.y - 300],
-              [centerPoint.x + 300, centerPoint.y + 300],
-            ],
-            { layers: ["3d-buildings"] }
-          );
-          const seen = new Set<string | number>();
-          for (const f of features) {
-            const fid = f.id ?? f.properties?.id ?? f.properties?.osm_id;
-            if (fid !== undefined && seen.has(fid)) continue;
-            if (fid !== undefined) seen.add(fid);
-            const c = buildingCentroid(f.geometry);
-            if (!c) continue;
-            const h = Number(f.properties?.render_height ?? f.properties?.height ?? AVG_BUILDING_HEIGHT_M) || AVG_BUILDING_HEIGHT_M;
-            const bh = Number(f.properties?.render_min_height ?? f.properties?.min_height ?? 0) || 0;
-            const distM = Math.sqrt(
-              Math.pow((c[0] - focusedBuilding.lng) * METERS_PER_DEG * Math.cos(focusedBuilding.lat * Math.PI / 180), 2) +
-              Math.pow((c[1] - focusedBuilding.lat) * METERS_PER_DEG, 2)
-            );
-            if (distM < 5) continue;
-            nearbyBuildings.push({ lat: c[1], lng: c[0], height: h, baseHeight: bh });
-          }
-        } catch (e) {
-          console.warn("Failed to query nearby buildings:", e);
-        }
-      }
-
-      const result = calculate3DHeatmap(
-        focusedBuilding.geometry,
-        focusedBuilding.height,
-        focusedBuilding.baseHeight,
-        focusedBuilding.lng,
-        focusedBuilding.lat,
-        selectedDate,
-        nearbyBuildings,
-      );
-      setHeatmapPatches(result.patches);
-      setAnalyzing(false);
-    };
-    const timer = setTimeout(calc, 50);
-    return () => clearTimeout(timer);
-  }, [focusedBuilding, selectedDate, hasCoords]);
-
   // Render 3D heatmap patches as fill-extrusion layers
   useEffect(() => {
     const map = mapRef.current;
@@ -813,7 +743,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
   const clearFocus = (): void => {
     setFocusedBuilding(null);
-    setHeatmapPatches([]);
+    clearHeatmap();
   };
 
   return (
