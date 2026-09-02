@@ -362,10 +362,16 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
           map.on("move", () => setViewVersion((v) => v + 1));
 
-map.on("click", (e: any) => {
+         map.on("click", (e: any) => {
   if (selectionModeRef.current !== "selecting") return;
 
-  const features = map.queryRenderedFeatures(e.point, {
+  // 1. Create a 10x10px search box around the click point so clicks don't miss thin edges
+  const bbox: [[number, number], [number, number]] = [
+    [e.point.x - 5, e.point.y - 5],
+    [e.point.x + 5, e.point.y + 5],
+  ];
+
+  const features = map.queryRenderedFeatures(bbox, {
     layers: ["3d-buildings"],
   });
 
@@ -375,61 +381,60 @@ map.on("click", (e: any) => {
     return;
   }
 
-  const bestFeature = deduplicateFeatures(features, e.lngLat.lng, e.lngLat.lat);
+  const tapLng = e.lngLat.lng;
+  const tapLat = e.lngLat.lat;
+
+  // 2. Uses the updated deduplicateFeatures logic to prioritize towers over ground podiums
+  const bestFeature = deduplicateFeatures(features, tapLng, tapLat);
   if (!bestFeature) {
     setSelectionMessage(tRef.current("threed.noBuildingFound"));
     setTimeout(() => setSelectionMessage(""), 2000);
     return;
   }
+            const id = bestFeature.id ?? bestFeature.properties?.id ?? bestFeature.properties?.osm_id ?? Math.random();
+            const centroid = buildingCentroid(bestFeature.geometry);
+            if (!centroid) return;
+            const [blng, blat] = centroid;
+            const height =
+              bestFeature.properties?.render_height ??
+              bestFeature.properties?.height ??
+              AVG_BUILDING_HEIGHT_M;
+            const baseHeight =
+              bestFeature.properties?.render_min_height ??
+              bestFeature.properties?.min_height ??
+              0;
+            removeHoverHighlight(map);
+            setFocusedBuilding({
+              id,
+              lat: blat,
+              lng: blng,
+              height: Number(height) || AVG_BUILDING_HEIGHT_M,
+              baseHeight: Number(baseHeight) || 0,
+              geometry: bestFeature.geometry,
+            });
+            setSelectionMode("to3d");
+          });
 
-  const id = bestFeature.id ?? bestFeature.properties?.id ?? bestFeature.properties?.osm_id ?? Math.random();
-
-  const height =
-    bestFeature.properties?.render_height ??
-    bestFeature.properties?.height ??
-    AVG_BUILDING_HEIGHT_M;
-  const baseHeight =
-    bestFeature.properties?.render_min_height ??
-    bestFeature.properties?.min_height ??
-    0;
-
-  removeHoverHighlight(map);
-
-  // FIX: Use e.lngLat (the real click point in degrees) instead of tile centroid
-  setFocusedBuilding({
-    id,
-    lat: e.lngLat.lat,
-    lng: e.lngLat.lng,
-    height: Number(height) || AVG_BUILDING_HEIGHT_M,
-    baseHeight: Number(baseHeight) || 0,
-    geometry: bestFeature.geometry,
-  });
-
-  setSelectionMode("to3d");
-});
-
-map.on("mousemove", (e: any) => {
-  if (selectionModeRef.current !== "selecting") {
-    removeHoverHighlight(map);
-    return;
-  }
-
-  const features = map.queryRenderedFeatures(e.point, {
-    layers: ["3d-buildings"],
-  });
-
-  if (!features || features.length === 0) {
-    removeHoverHighlight(map);
-    return;
-  }
-
-  const bestFeature = deduplicateFeatures(features, e.lngLat.lng, e.lngLat.lat);
-  if (bestFeature && bestFeature.geometry) {
-    setHoverHighlight(map, bestFeature.geometry);
-  } else {
-    removeHoverHighlight(map);
-  }
-});
+          map.on("mousemove", (e: any) => {
+            if (selectionModeRef.current !== "selecting") {
+              removeHoverHighlight(map);
+              return;
+            }
+            const features = map.queryRenderedFeatures(e.point, {
+              layers: ["3d-buildings"],
+            });
+            if (!features || features.length === 0) {
+              removeHoverHighlight(map);
+              return;
+            }
+            const bestFeature = deduplicateFeatures(features, e.lngLat.lng, e.lngLat.lat);
+            if (bestFeature && bestFeature.geometry) {
+              setHoverHighlight(map, bestFeature.geometry);
+            } else {
+              removeHoverHighlight(map);
+            }
+          });
+        });
 
         map.on("error", (e: any) => {
           if (cancelled) return;
@@ -439,7 +444,7 @@ map.on("mousemove", (e: any) => {
           setMapError(true);
         });
 
-      catch (error) {
+      } catch (error) {
         console.error("Map initialization error:", error);
         setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`);
         if (!cancelled) {
