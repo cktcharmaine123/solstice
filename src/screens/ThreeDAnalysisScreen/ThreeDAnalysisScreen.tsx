@@ -439,7 +439,7 @@ map.on("mousemove", (e: any) => {
           setMapError(true);
         });
 
-      } catch (error) {
+      catch (error) {
         console.error("Map initialization error:", error);
         setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`);
         if (!cancelled) {
