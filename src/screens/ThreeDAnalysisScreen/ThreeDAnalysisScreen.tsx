@@ -820,30 +820,30 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       )}
 
       {mapReady && sunVisible && selectionMode === "idle" && (
-        <div className="pointer-events-none absolute top-20 left-4 z-10 rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm">
-          <p className="font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282]">
+        <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-lg bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-sm md:left-4 md:top-20 md:px-3 md:py-2">
+          <p className="hidden font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282] md:block">
             {t("analysis.sunPosition")}
           </p>
-          <div className="flex items-center gap-3">
-            <p className="font-['Inter'] text-sm font-medium text-[#7a4a4a]">
+          <div className="flex items-center gap-2 md:gap-3">
+            <p className="font-['Inter'] text-xs font-medium text-[#7a4a4a] md:text-sm">
               {displayAltitude}&deg; {t("analysis.altitude")}
             </p>
-            <span className="h-4 w-px bg-[#e0e0e0]" aria-hidden="true" />
-            <p className="font-['Inter'] text-sm font-medium text-[#7a4a4a]">
+            <span className="h-3 w-px bg-[#e0e0e0] md:h-4" aria-hidden="true" />
+            <p className="font-['Inter'] text-xs font-medium text-[#7a4a4a] md:text-sm">
               {displayAzimuth}&deg; {t("analysis.azimuth")} ({azimuthToCompass(displayAzimuth)})
             </p>
           </div>
           {focusedBuilding && (
-            <div className="mt-1.5 flex items-center gap-2 border-t border-[#e0e0e0] pt-1.5">
+            <div className="mt-1 flex items-center gap-2 border-t border-[#e0e0e0] pt-1 md:mt-1.5 md:pt-1.5">
               {analyzing && (
-                <p className="font-['Inter'] text-sm font-medium text-[#7a4a4a]">
+                <p className="font-['Inter'] text-xs font-medium text-[#7a4a4a] md:text-sm">
                   {t("threed.analyzing")}
                 </p>
               )}
               <button
                 type="button"
                 onClick={clearFocus}
-                className="pointer-events-auto ml-auto flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 font-['Inter'] text-[11px] font-medium text-[#7a4a4a] hover:bg-[#e8e8e8]"
+                className="pointer-events-auto ml-auto flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 font-['Inter'] text-[10px] font-medium text-[#7a4a4a] hover:bg-[#e8e8e8] md:text-[11px]"
                 aria-label={t("threed.clearFocus")}
               >
                 <XIcon className="h-3 w-3" aria-hidden="true" />
