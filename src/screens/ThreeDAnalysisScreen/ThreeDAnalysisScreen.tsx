@@ -18,6 +18,7 @@ import {
   AVG_BUILDING_HEIGHT_M,
   type SurfacePatch,
   type FocusedBuilding,
+  type SelectedBuilding,
 } from "../../utils/heatmap3d";
 import {
   isValidDate,
@@ -385,23 +386,24 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const tapLat = e.lngLat.lat;
 
   // 2. Uses the updated deduplicateFeatures logic to prioritize towers over ground podiums
-  const bestFeature = deduplicateFeatures(features, tapLng, tapLat);
-  if (!bestFeature) {
+  const selection = deduplicateFeatures(features, tapLng, tapLat);
+  if (!selection) {
     setSelectionMessage(tRef.current("threed.noBuildingFound"));
     setTimeout(() => setSelectionMessage(""), 2000);
     return;
   }
-            const id = bestFeature.id ?? bestFeature.properties?.id ?? bestFeature.properties?.osm_id ?? Math.random();
+            const bestFeature: SelectedBuilding = selection;
+            const id = bestFeature.feature.id ?? bestFeature.feature.properties?.id ?? bestFeature.feature.properties?.osm_id ?? Math.random();
             const centroid = buildingCentroid(bestFeature.geometry);
             if (!centroid) return;
             const [blng, blat] = centroid;
             const height =
-              bestFeature.properties?.render_height ??
-              bestFeature.properties?.height ??
+              bestFeature.feature.properties?.render_height ??
+              bestFeature.feature.properties?.height ??
               AVG_BUILDING_HEIGHT_M;
             const baseHeight =
-              bestFeature.properties?.render_min_height ??
-              bestFeature.properties?.min_height ??
+              bestFeature.feature.properties?.render_min_height ??
+              bestFeature.feature.properties?.min_height ??
               0;
             removeHoverHighlight(map);
             setFocusedBuilding({
@@ -427,9 +429,9 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               removeHoverHighlight(map);
               return;
             }
-            const bestFeature = deduplicateFeatures(features, e.lngLat.lng, e.lngLat.lat);
-            if (bestFeature && bestFeature.geometry) {
-              setHoverHighlight(map, bestFeature.geometry);
+            const selection = deduplicateFeatures(features, e.lngLat.lng, e.lngLat.lat);
+            if (selection && selection.geometry) {
+              setHoverHighlight(map, selection.geometry);
             } else {
               removeHoverHighlight(map);
             }

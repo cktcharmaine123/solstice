@@ -17,6 +17,13 @@ export function polygonRings(geometry: any): number[][][] {
   return [];
 }
 
+export function allPolygonRings(geometry: any): number[][][][] {
+  if (!geometry) return [];
+  if (geometry.type === "Polygon") return [geometry.coordinates];
+  if (geometry.type === "MultiPolygon") return geometry.coordinates;
+  return [];
+}
+
 export function buildingCentroid(geometry: any): [number, number] | null {
   if (!geometry) return null;
   if (geometry.type === "Polygon") {
@@ -71,6 +78,23 @@ export function pointInPolygon(lng: number, lat: number, rings: number[][][]): b
 export function pointInGeometry(lng: number, lat: number, geometry: any): boolean {
   const rings = polygonRings(geometry);
   return pointInPolygon(lng, lat, rings);
+}
+
+export function findHitPolygon(
+  lng: number,
+  lat: number,
+  geometry: any,
+): number[][][] | null {
+  const allPolys = allPolygonRings(geometry);
+  for (const rings of allPolys) {
+    if (pointInPolygon(lng, lat, rings)) return rings;
+  }
+  return null;
+}
+
+export function polygonCentroid(rings: number[][][]): [number, number] | null {
+  if (!rings || rings.length === 0) return null;
+  return centroidOfCoords(rings[0]);
 }
 
 export function offsetPoint(lng: number, lat: number, dxMeters: number, dyMeters: number): [number, number] {

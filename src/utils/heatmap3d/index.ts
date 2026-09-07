@@ -9,10 +9,13 @@ export {
 
 export {
   polygonRings,
+  allPolygonRings,
   buildingCentroid,
   pointInRing,
   pointInPolygon,
   pointInGeometry,
+  findHitPolygon,
+  polygonCentroid,
   offsetPoint,
 } from "./geometry";
 
@@ -20,7 +23,7 @@ export { sunlightColor } from "./color";
 
 export { calculate3DHeatmap } from "./calculation";
 
-export { deduplicateFeatures } from "./buildingSelection";
+export { deduplicateFeatures, type SelectedBuilding } from "./buildingSelection";
 
 export { queryNearbyBuildings } from "./mapQueries";
 

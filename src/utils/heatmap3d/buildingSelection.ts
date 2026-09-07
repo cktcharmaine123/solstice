@@ -1,23 +1,30 @@
 import { METERS_PER_DEG } from "./types";
-import { polygonRings, pointInGeometry, buildingCentroid } from "./geometry";
+import { polygonRings, pointInGeometry, buildingCentroid, findHitPolygon, polygonCentroid } from "./geometry";
+
+export type SelectedBuilding = {
+  feature: any;
+  geometry: any;
+};
 
 export function deduplicateFeatures(
   features: any[],
   tapLng?: number,
   tapLat?: number,
   maxSelectDistanceMeters: number = 100
-): any | null {
+): SelectedBuilding | null {
   if (!features || features.length === 0) return null;
 
-  // 1. Process features and extract elevation/height metrics
   const candidates = features.map((f) => {
     const props = f.properties || {};
     const height = Number(props.render_height ?? props.height ?? 0);
     const minHeight = Number(props.render_min_height ?? props.min_height ?? 0);
 
     let containsTap = false;
+    let hitRings: number[][][] | null = null;
+
     if (tapLng !== undefined && tapLat !== undefined && f.geometry) {
-      containsTap = pointInGeometry(tapLng, tapLat, f.geometry);
+      hitRings = findHitPolygon(tapLng, tapLat, f.geometry);
+      containsTap = hitRings !== null;
     }
 
     return {
@@ -26,14 +33,13 @@ export function deduplicateFeatures(
       minHeight,
       span: height - minHeight,
       containsTap,
+      hitRings,
     };
   });
 
-  // 2. Filter by click containment if available, otherwise consider all candidates
   const containing = candidates.filter((c) => c.containsTap);
   const pool = containing.length > 0 ? containing : candidates;
 
-  // 3. Sort pool: Prioritize elevated towers sitting on top of podiums first, then tallest height
   pool.sort((a, b) => {
     if (Math.abs(b.minHeight - a.minHeight) > 1) {
       return b.minHeight - a.minHeight;
@@ -41,8 +47,19 @@ export function deduplicateFeatures(
     return b.height - a.height;
   });
 
-  return pool[0].feature;
+  const winner = pool[0];
+
+  let geometry: any;
+  if (winner.hitRings) {
+    geometry = { type: "Polygon", coordinates: winner.hitRings };
+  } else if (tapLng !== undefined && tapLat !== undefined && winner.feature.geometry?.type === "MultiPolygon") {
+    const rings = findHitPolygon(tapLng, tapLat, winner.feature.geometry);
+    geometry = rings ? { type: "Polygon", coordinates: rings } : winner.feature.geometry;
+  } else {
+    geometry = winner.feature.geometry;
+  }
+
+  return { feature: winner.feature, geometry };
 }
 
-// Export alias so existing imports don't break
 export const selectBuildingFromPoint = deduplicateFeatures;
