@@ -52,15 +52,16 @@ type SelectionMode = "idle" | "to2d" | "selecting" | "to3d";
 
 type SeasonalPreset = {
   labelKey: TranslationKey;
+  shortLabelKey: TranslationKey;
   month: number;
   day: number;
   color: string;
 };
 
 const SEASONAL_PRESETS: SeasonalPreset[] = [
-  { labelKey: "analysis.summerSolstice" as TranslationKey, month: 6, day: 21, color: "#F97316" },
-  { labelKey: "analysis.winterSolstice" as TranslationKey, month: 12, day: 21, color: "#3B82F6" },
-  { labelKey: "analysis.equinox" as TranslationKey, month: 3, day: 21, color: "#F59E0B" },
+  { labelKey: "analysis.summerSolstice" as TranslationKey, shortLabelKey: "analysis.summerShort" as TranslationKey, month: 6, day: 21, color: "#F97316" },
+  { labelKey: "analysis.winterSolstice" as TranslationKey, shortLabelKey: "analysis.winterShort" as TranslationKey, month: 12, day: 21, color: "#3B82F6" },
+  { labelKey: "analysis.equinox" as TranslationKey, shortLabelKey: "analysis.equinoxShort" as TranslationKey, month: 3, day: 21, color: "#F59E0B" },
 ];
 
 export function ThreeDAnalysisScreen(): JSX.Element {
@@ -880,7 +881,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           aria-label="Sun timing and time control"
           className="absolute bottom-0 left-0 right-0 z-10 flex w-full flex-col rounded-t-md bg-[#f9f9f9f0] px-4 py-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm"
         >
-          <div className="mb-1.5 flex gap-1.5">
+          <div
+            className="mb-1.5 flex gap-1.5 overflow-x-auto md:overflow-visible"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
+          >
             {SEASONAL_PRESETS.map((preset) => {
               const isSame =
                 selectedDate.getMonth() === preset.month - 1 && selectedDate.getDate() === preset.day;
@@ -894,7 +898,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                       newDate.setHours(oldTime.getHours(), oldTime.getMinutes(), 0, 0);
                       setSelectedDate(newDate);
                     }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 font-['Inter'] text-xs font-medium transition-colors ${
+                  className={`flex shrink-0 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 font-['Inter'] text-xs font-medium transition-colors md:flex-1 ${
                     isSame
                       ? "border-transparent text-white"
                       : "border-[#e0e0e0] bg-white text-[#555] hover:bg-neutral-50"
@@ -907,7 +911,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                     style={{ backgroundColor: isSame ? "rgba(255,255,255,0.8)" : preset.color }}
                     aria-hidden="true"
                   />
-                  <span className="truncate">{t(preset.labelKey)}</span>
+                  <span className="whitespace-nowrap md:hidden">{t(preset.shortLabelKey)}</span>
+                  <span className="hidden truncate md:block">{t(preset.labelKey)}</span>
                 </button>
               );
             })}
