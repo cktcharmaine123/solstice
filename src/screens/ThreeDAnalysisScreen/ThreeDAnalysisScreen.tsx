@@ -217,14 +217,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           antialias: true
         });
 
-        map.addControl(
-          new maplibregl.NavigationControl({
-            visualizePitch: true,
-            showCompass: false
-          }),
-          "top-right"
-        );
-
         map.once("style.load", () => {
           if (cancelled) return;
           setDebugInfo("Style loaded, applying monochrome filter...");
