@@ -913,112 +913,117 @@ function AnalysisScreenContent(): JSX.Element {
             </label>
           </div>
         </section>
-        <div className="absolute left-4 top-[78px] flex w-[calc(100%-32px)] items-center gap-[18px]">
-          {["analysis.saveLocation", "analysis.saveGraph"].map((key) => (
-            <Button
-              key={key}
-              type="button"
-              variant="ghost"
-              onClick={key === "analysis.saveLocation" ? () => void handleSaveLocation() : () => void handleSaveGraph()}
-              disabled={key === "analysis.saveLocation" && (isSavingLocation || !coordsReady) || key === "analysis.saveGraph" && (!coordsReady || isCapturing)}
-              className="min-h-12 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
-            >
-              {t(key as TranslationKey)}
-            </Button>
-          ))}
-        </div>
-        {saveMessage && <p className="absolute left-3 top-[114px] font-['Inter'] text-xs text-red-600">{saveMessage}</p>}
-      </header>
-
-      <div className="absolute left-0 top-[200px] z-30 flex w-full items-center gap-2 px-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setModalOpen(true)}
-          disabled={isLoading}
-          className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
+        <div
+          className="absolute left-4 top-[78px] z-30 flex w-[calc(100%-32px)] items-center gap-2 overflow-x-auto"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
         >
-          <PlusIcon className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
-          <span className="[font-family:'Adamina',Helvetica] text-[11px] leading-[22px] text-[#7a4a4a]">
-            {t("analysis.addSunPath")}
-          </span>
-        </Button>
-        {coordsReady && center && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void handleSaveLocation()}
+            disabled={isSavingLocation || !coordsReady}
+            className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
+          >
+            {t("analysis.saveLocation")}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void handleSaveGraph()}
+            disabled={!coordsReady || isCapturing}
+            className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
+          >
+            {t("analysis.saveGraph")}
+          </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={() => {
-              sessionStorage.setItem("siteLat", center.lat.toString());
-              sessionStorage.setItem("siteLng", center.lng.toString());
-              navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}`);
-            }}
+            onClick={() => setModalOpen(true)}
+            disabled={isLoading}
             className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
           >
-            <Box className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
+            <PlusIcon className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
             <span className="[font-family:'Adamina',Helvetica] text-[11px] leading-[22px] text-[#7a4a4a]">
-              {t("analysis.threeDAnalysis")}
-            </span>
-            <span className="[font-family:'Adamina',Helvetica] text-[10px] leading-[22px] text-[#7a4a4a]/50">
-              (developing)
+              {t("analysis.addSunPath")}
             </span>
           </Button>
-        )}
-        {sunPaths.length > 0 && (
-          <div
-            ref={chipsRowRef}
-            onMouseDown={handleDragStart}
-            onMouseMove={handleDragMove}
-            onMouseUp={handleDragEnd}
-            onMouseLeave={handleDragEnd}
-            className="flex items-center gap-2 overflow-x-auto pb-1"
-            style={{
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-              maxWidth: "calc(100% - 180px)",
-              WebkitOverflowScrolling: "touch",
-              cursor: dragState.current.active ? "grabbing" : "grab",
-              touchAction: "pan-x",
-            }}
-          >
-            {sunPaths.map((path) => (
-              <span
-                key={path.id}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
-                style={{
-                  backgroundColor: `${path.color}1a`,
-                  color: path.color,
-                  opacity: path.visible ? 1 : 0.45,
-                }}
-              >
-                {path.label}
-                <button
-                  type="button"
-                  onClick={() => togglePathVisibility(path.id)}
-                  className="ml-0.5 flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
-                  aria-label={path.visible ? `Hide ${path.label}` : `Show ${path.label}`}
-                  aria-pressed={!path.visible}
-                >
-                  {path.visible ? <Eye className="h-3 w-3" aria-hidden="true" /> : <EyeOff className="h-3 w-3" aria-hidden="true" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removePath(path.id)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
-                  aria-label={`Remove ${path.label}`}
-                >
-                  <XIcon className="h-3 w-3" aria-hidden="true" />
-                </button>
+          {coordsReady && center && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                sessionStorage.setItem("siteLat", center.lat.toString());
+                sessionStorage.setItem("siteLng", center.lng.toString());
+                navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}`);
+              }}
+              className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
+            >
+              <Box className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
+              <span className="[font-family:'Adamina',Helvetica] text-[11px] leading-[22px] text-[#7a4a4a]">
+                {t("analysis.threeDAnalysis")}
               </span>
-            ))}
-          </div>
-        )}
-      </div>
+              <span className="[font-family:'Adamina',Helvetica] text-[10px] leading-[22px] text-[#7a4a4a]/50">
+                (developing)
+              </span>
+            </Button>
+          )}
+          {sunPaths.length > 0 && (
+            <div
+              ref={chipsRowRef}
+              onMouseDown={handleDragStart}
+              onMouseMove={handleDragMove}
+              onMouseUp={handleDragEnd}
+              onMouseLeave={handleDragEnd}
+              className="flex items-center gap-2 overflow-x-auto pb-1"
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                WebkitOverflowScrolling: "touch",
+                cursor: dragState.current.active ? "grabbing" : "grab",
+                touchAction: "pan-x",
+              }}
+            >
+              {sunPaths.map((path) => (
+                <span
+                  key={path.id}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium"
+                  style={{
+                    backgroundColor: `${path.color}1a`,
+                    color: path.color,
+                    opacity: path.visible ? 1 : 0.45,
+                  }}
+                >
+                  {path.label}
+                  <button
+                    type="button"
+                    onClick={() => togglePathVisibility(path.id)}
+                    className="ml-0.5 flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+                    aria-label={path.visible ? `Hide ${path.label}` : `Show ${path.label}`}
+                    aria-pressed={!path.visible}
+                  >
+                    {path.visible ? <Eye className="h-3 w-3" aria-hidden="true" /> : <EyeOff className="h-3 w-3" aria-hidden="true" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removePath(path.id)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+                    aria-label={`Remove ${path.label}`}
+                  >
+                    <XIcon className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {saveMessage && <p className="absolute left-3 top-[134px] font-['Inter'] text-xs text-red-600">{saveMessage}</p>}
+      </header>
 
       <section
         ref={mapSectionRef}
         aria-label="Interactive sun path map"
-        className="absolute left-0 top-[251px] w-full px-4"
-        style={{ height: "430px", minHeight: "430px" }}
+        className="absolute left-0 top-[200px] w-full px-4"
+        style={{ height: "500px", minHeight: "500px" }}
       >
         {isLoading || !coordsReady || !center ? (
           <LoadingFallback t={t} />
@@ -1037,7 +1042,7 @@ function AnalysisScreenContent(): JSX.Element {
               shiftKeyRotate
               rotateControl={false}
               className="h-full w-full"
-              style={{ height: "100%", width: "100%", minHeight: "430px" }}
+              style={{ height: "100%", width: "100%", minHeight: "500px" }}
             >
               <TileLayer
                 url="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_2f17_1_9b643c4265560a8656bae3bb"
@@ -1138,7 +1143,7 @@ function AnalysisScreenContent(): JSX.Element {
 
       <section
         aria-label="Sun timing and time control"
-        className="absolute left-0 top-[700px] z-30 flex w-full flex-col rounded-md bg-[#f9f9f9f0] px-4 py-2 pb-[120px] backdrop-blur-sm"
+        className="absolute left-0 top-[710px] z-30 flex w-full flex-col rounded-md bg-[#f9f9f9f0] px-4 py-2 pb-[120px] backdrop-blur-sm"
       >
         {sunTimes ? (
           <div className="mb-1 flex items-center justify-between font-['Inter'] text-[11px] text-[#828282]">
