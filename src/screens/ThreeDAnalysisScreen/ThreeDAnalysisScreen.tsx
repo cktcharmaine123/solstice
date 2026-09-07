@@ -794,14 +794,14 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               }
             }}
             aria-label={t("threed.focusBuilding")}
-            className={`pointer-events-auto flex h-12 items-center gap-1.5 rounded-full px-4 shadow-sm backdrop-blur-sm transition-colors ${
+            className={`pointer-events-auto flex h-10 items-center gap-1.5 rounded-full px-3 shadow-sm backdrop-blur-sm transition-colors md:h-12 md:px-4 ${
               selectionMode !== "idle"
                 ? "bg-[#7a4a4a] text-white hover:bg-[#6b3f3f]"
                 : "bg-white/90 text-[#7a4a4a] hover:bg-white"
             }`}
           >
-            <Building2Icon className="h-5 w-5" aria-hidden="true" />
-            <span className="font-['Inter'] text-sm font-medium">
+            <Building2Icon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
+            <span className="font-['Inter'] text-xs font-medium md:text-sm">
               {selectionMode !== "idle" ? t("threed.cancelSelection") : t("threed.focusBuilding")}
             </span>
           </Button>
@@ -854,22 +854,22 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       )}
 
       {mapReady && focusedBuilding && selectionMode === "idle" && (
-        <div className="pointer-events-none absolute top-20 right-4 z-10 rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm">
-          <p className="mb-1 font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282]">
+        <div className="pointer-events-none absolute top-16 right-2 z-10 rounded-lg bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-sm md:top-20 md:right-4 md:px-3 md:py-2">
+          <p className="mb-0.5 hidden font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282] md:mb-1 md:block">
             {t("threed.legend")}
           </p>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: "#EF4444" }} aria-hidden="true" />
-              <span className="font-['Inter'] text-[11px] text-[#555]">{t("threed.legendHigh")}</span>
+          <div className="flex flex-col gap-0.5 md:gap-1">
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <span className="h-2.5 w-2.5 rounded-full md:h-3 md:w-3" style={{ backgroundColor: "#EF4444" }} aria-hidden="true" />
+              <span className="font-['Inter'] text-[10px] text-[#555] md:text-[11px]">{t("threed.legendHigh")}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: "#FACC15" }} aria-hidden="true" />
-              <span className="font-['Inter'] text-[11px] text-[#555]">{t("threed.legendMid")}</span>
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <span className="h-2.5 w-2.5 rounded-full md:h-3 md:w-3" style={{ backgroundColor: "#FACC15" }} aria-hidden="true" />
+              <span className="font-['Inter'] text-[10px] text-[#555] md:text-[11px]">{t("threed.legendMid")}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: "#3B82F6" }} aria-hidden="true" />
-              <span className="font-['Inter'] text-[11px] text-[#555]">{t("threed.legendLow")}</span>
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <span className="h-2.5 w-2.5 rounded-full md:h-3 md:w-3" style={{ backgroundColor: "#3B82F6" }} aria-hidden="true" />
+              <span className="font-['Inter'] text-[10px] text-[#555] md:text-[11px]">{t("threed.legendLow")}</span>
             </div>
           </div>
         </div>

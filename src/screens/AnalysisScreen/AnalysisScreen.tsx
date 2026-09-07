@@ -1110,16 +1110,16 @@ function AnalysisScreenContent(): JSX.Element {
             </MapContainer>
 
             {!isCapturing && primaryPathVisible && (
-              <div className="pointer-events-none absolute left-4 top-4 z-[500] rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm">
-                <p className="font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282]">
+              <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-lg bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur-sm md:left-4 md:top-4 md:px-3 md:py-2">
+                <p className="hidden font-['Inter'] text-[11px] font-medium uppercase tracking-[0.08em] text-[#828282] md:block">
                   {t("analysis.sunPosition")}
                 </p>
-                <div className="flex items-center gap-3">
-                  <p className="font-['Inter'] text-sm font-medium text-[#7a4a4a]">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <p className="font-['Inter'] text-xs font-medium text-[#7a4a4a] md:text-sm">
                     {displayAltitude}&deg; {t("analysis.altitude")}
                   </p>
-                  <span className="h-4 w-px bg-[#e0e0e0]" aria-hidden="true" />
-                  <p className="font-['Inter'] text-sm font-medium text-[#7a4a4a]">
+                  <span className="h-3 w-px bg-[#e0e0e0] md:h-4" aria-hidden="true" />
+                  <p className="font-['Inter'] text-xs font-medium text-[#7a4a4a] md:text-sm">
                     {displayAzimuth}&deg; {t("analysis.azimuth")} ({azimuthToCompass(displayAzimuth)})
                   </p>
                 </div>
