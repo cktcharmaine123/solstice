@@ -93,21 +93,27 @@
   </div>
 
   <script>
-    // Show fallback message after 8 seconds if the app hasn't loaded
+    window.__recoveryTimer = setTimeout(function () {
+      if (window.__appBooted || new URLSearchParams(window.location.search).has("solstice-recovery")) return;
+      var url = new URL(window.location.href);
+      url.searchParams.set("solstice-recovery", "1");
+      window.location.replace(url.href);
+    }, 4000);
+
     window.__fallbackTimer = setTimeout(function () {
       var fallback = document.getElementById("app-loading-fallback");
       if (fallback) fallback.style.display = "block";
     }, 8000);
 
-    // Hide the loading screen once the app mounts
     window.__hideAppLoading = function () {
+      window.__appBooted = true;
+      clearTimeout(window.__recoveryTimer);
       clearTimeout(window.__fallbackTimer);
       var el = document.getElementById("app-loading");
       if (el) el.remove();
     };
   </script>
 
-  <!-- Point Vite directly to your source file, NOT an asset hash -->
   <script type="module" src="/src/index.tsx"></script>
 </body>
 </html>
