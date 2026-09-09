@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Solstice</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  
+
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Adamina&family=Inter:wght@400;500;600&display=swap");
 
@@ -17,10 +17,95 @@
   <meta property="og:image" content="https://bolt.new/static/og_default.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+
+  <style>
+    #app-loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 9999;
+      font-family: "Inter", Helvetica, sans-serif;
+    }
+    #app-loading h1 {
+      font-family: "Adamina", Helvetica, serif;
+      font-size: 28px;
+      font-weight: 400;
+      letter-spacing: -0.24px;
+      color: #7a4a4a;
+      margin: 0;
+    }
+    #app-loading .spinner {
+      margin-top: 165px;
+      width: 40px;
+      height: 40px;
+      border: 5px solid #f7f1d8;
+      border-top-color: #7a4a4a;
+      border-radius: 50%;
+      animation: splash-spin 1s linear infinite;
+    }
+    #app-loading-fallback {
+      display: none;
+      margin-top: 32px;
+      text-align: center;
+      max-width: 320px;
+      padding: 0 24px;
+    }
+    #app-loading-fallback p {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.5;
+      margin: 0 0 16px;
+    }
+    #app-loading-fallback button {
+      font-family: "Inter", Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: #ffffff;
+      background: #7a4a4a;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 24px;
+      cursor: pointer;
+    }
+    #app-loading-fallback button:hover {
+      background: #6b3f3f;
+    }
+    @keyframes splash-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
   <div id="root"></div>
+
+  <div id="app-loading" aria-label="Loading Solstice">
+    <h1>Solstice</h1>
+    <div class="spinner"></div>
+    <div id="app-loading-fallback">
+      <p id="app-loading-message">The app is taking longer than expected to load. If this persists, try refreshing the page.</p>
+      <button onclick="window.location.reload()">Refresh page</button>
+    </div>
+  </div>
+
+  <script>
+    // Show fallback message after 8 seconds if the app hasn't loaded
+    window.__fallbackTimer = setTimeout(function () {
+      var fallback = document.getElementById("app-loading-fallback");
+      if (fallback) fallback.style.display = "block";
+    }, 8000);
+
+    // Hide the loading screen once the app mounts
+    window.__hideAppLoading = function () {
+      clearTimeout(window.__fallbackTimer);
+      var el = document.getElementById("app-loading");
+      if (el) el.remove();
+    };
+  </script>
 
   <!-- Point Vite directly to your source file, NOT an asset hash -->
   <script type="module" src="/src/index.tsx"></script>
