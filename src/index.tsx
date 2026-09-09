@@ -5,6 +5,7 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import { SplashProvider } from "./screens/SplashScreen/SplashContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { LoadingScreenDismissal } from "./components/LoadingScreenDismissal";
 import { SignInScreen } from "./screens/SignInScreen/SignInScreen";
 import { PrivacyPolicyScreen } from "./screens/PrivacyPolicyScreen/PrivacyPolicyScreen";
 import { HomeScreen } from "./screens/HomeScreen/HomeScreen";
@@ -26,30 +27,28 @@ if (!container) {
   root.render(
     <StrictMode>
       <AppErrorBoundary>
-        <HashRouter>
-          <LanguageProvider>
-            <SplashProvider>
-              <Routes>
-                <Route path="/" element={<SignInScreen />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicyScreen />} />
-                <Route path="/home" element={<HomeScreen />} />
-                <Route path="/analysis" element={<AnalysisScreen />} />
-                <Route path="/locations" element={<LocationsScreen />} />
-                <Route path="/graphs" element={<GraphsScreen />} />
-                <Route path="/settings" element={<SettingsScreen />} />
-                <Route path="/language" element={<LanguageScreen />} />
-                <Route path="/analysis-3d" element={<ThreeDAnalysisScreen />} />
-                <Route path="/graph/:graphId" element={<GraphDetailScreen />} />
-                <Route path="*" element={<SignInScreen />} />
-              </Routes>
-            </SplashProvider>
-          </LanguageProvider>
-        </HashRouter>
+        <LoadingScreenDismissal>
+          <HashRouter>
+            <LanguageProvider>
+              <SplashProvider>
+                <Routes>
+                  <Route path="/" element={<SignInScreen />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicyScreen />} />
+                  <Route path="/home" element={<HomeScreen />} />
+                  <Route path="/analysis" element={<AnalysisScreen />} />
+                  <Route path="/locations" element={<LocationsScreen />} />
+                  <Route path="/graphs" element={<GraphsScreen />} />
+                  <Route path="/settings" element={<SettingsScreen />} />
+                  <Route path="/language" element={<LanguageScreen />} />
+                  <Route path="/analysis-3d" element={<ThreeDAnalysisScreen />} />
+                  <Route path="/graph/:graphId" element={<GraphDetailScreen />} />
+                  <Route path="*" element={<SignInScreen />} />
+                </Routes>
+              </SplashProvider>
+            </LanguageProvider>
+          </HashRouter>
+        </LoadingScreenDismissal>
       </AppErrorBoundary>
     </StrictMode>,
   );
-
-  if (typeof window.__hideAppLoading === "function") {
-    window.__hideAppLoading();
-  }
 }
