@@ -261,117 +261,75 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           antialias: true
         });
 
-        map.once("styleload", () => {
+        let styleInitialized = false;
+
+        const setupStyle = () => {
           if (cancelled) return;
-          setDebugInfo("Style loaded, applying monochrome filter...");
 
           try {
-            const layers = map.getStyle().layers;
+            if (!styleInitialized) {
+              setDebugInfo("Style loaded, applying monochrome filter...");
 
-            const layersToRemove = layers
-              .filter((layer: any) => {
-                const layerId = layer.id.toLowerCase();
-                const layerType = layer.type;
-                const sourceLayer = layer['source-layer'] || '';
+              const layers = map.getStyle().layers;
 
-                if (layerType === 'symbol') return true;
-                if (sourceLayer.includes('poi') || sourceLayer.includes('place')) return true;
-                if (layerId.includes('label') || layerId.includes('name') || layerId.includes('text')) return true;
-                if (sourceLayer.includes('building')) return false;
+              const layersToRemove = layers
+                .filter((layer: any) => {
+                  const layerId = layer.id.toLowerCase();
+                  const layerType = layer.type;
+                  const sourceLayer = layer['source-layer'] || '';
 
-                return false;
-              })
-              .map((layer: any) => layer.id);
+                  if (layerType === 'symbol') return true;
+                  if (sourceLayer.includes('poi') || sourceLayer.includes('place')) return true;
+                  if (layerId.includes('label') || layerId.includes('name') || layerId.includes('text')) return true;
+                  if (sourceLayer.includes('building')) return false;
 
-            layersToRemove.forEach((layerId: string) => {
-              try {
-                if (map.getLayer(layerId)) {
-                  map.removeLayer(layerId);
-                }
-              } catch (e) {
-                console.warn(`Could not remove layer ${layerId}:`, e);
-              }
-            });
+                  return false;
+                })
+                .map((layer: any) => layer.id);
 
-            const remainingLayers = map.getStyle().layers;
-
-            remainingLayers.forEach((layer: any) => {
-              try {
-                if (layer.type === 'fill-extrusion') return;
-
-                if (layer.type === 'fill') {
-                  const paint = layer.paint || {};
-                  const fillColor = paint['fill-color'];
-                  if (fillColor) {
-                    map.setPaintProperty(layer.id, 'fill-color', '#e0e0e0');
+              layersToRemove.forEach((layerId: string) => {
+                try {
+                  if (map.getLayer(layerId)) {
+                    map.removeLayer(layerId);
                   }
+                } catch (e) {
+                  console.warn(`Could not remove layer ${layerId}:`, e);
                 }
+              });
 
-                if (layer.type === 'line') {
-                  const paint = layer.paint || {};
-                  const lineColor = paint['line-color'];
-                  if (lineColor) {
-                    map.setPaintProperty(layer.id, 'line-color', '#666666');
+              const remainingLayers = map.getStyle().layers;
+
+              remainingLayers.forEach((layer: any) => {
+                try {
+                  if (layer.type === 'fill-extrusion') return;
+
+                  if (layer.type === 'fill') {
+                    const paint = layer.paint || {};
+                    const fillColor = paint['fill-color'];
+                    if (fillColor) {
+                      map.setPaintProperty(layer.id, 'fill-color', '#e0e0e0');
+                    }
                   }
-                }
 
-              } catch (e) {
-                console.warn(`Could not modify layer ${layer.id}:`, e);
-              }
-            });
+                  if (layer.type === 'line') {
+                    const paint = layer.paint || {};
+                    const lineColor = paint['line-color'];
+                    if (lineColor) {
+                      map.setPaintProperty(layer.id, 'line-color', '#666666');
+                    }
+                  }
 
-            setDebugInfo("Applied monochrome colors to base map");
+                } catch (e) {
+                  console.warn(`Could not modify layer ${layer.id}:`, e);
+                }
+              });
 
-            // Add terrain DEM source and enable 3D terrain for Hong Kong
-            if (useTerrain) {
-              try {
-                if (!map.getSource('terrain-dem')) {
-                  map.addSource('terrain-dem', {
-                    type: 'raster-dem',
-                    tiles: [
-                      'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
-                    ],
-                    encoding: 'terrarium',
-                    tileSize: 256,
-                    maxzoom: 13,
-                  });
-                }
-                if (map.setTerrain) {
-                  map.setTerrain({
-                    source: 'terrain-dem',
-                    exaggeration: 1.5,
-                  });
-                  setDebugInfo("Terrain enabled");
-                }
-              } catch (e) {
-                console.warn("Failed to add terrain:", e);
-                setDebugInfo("Terrain unavailable, using flat ground");
-              }
+              setDebugInfo("Applied monochrome colors to base map");
+              styleInitialized = true;
             }
 
-            if (!map.getLayer('building-shadows')) {
-              try {
-                map.addLayer({
-                  'id': 'building-shadows',
-                  'source': 'openmaptiles',
-                  'source-layer': 'building',
-                  'type': 'fill',
-                  'minzoom': 14,
-                  'paint': {
-                    'fill-color': '#1a1a2e',
-                    'fill-opacity': 0,
-                    'fill-translate': [0, 0],
-                    'fill-translate-anchor': 'map'
-                  }
-                });
-              } catch (e) {
-                console.warn("Failed to add building shadows:", e);
-              }
-            }
-
+            // Add 3D buildings layer (re-add if removed by terrain style reload)
             if (!map.getLayer('3d-buildings')) {
-              setDebugInfo("Adding 3D buildings...");
-
               try {
                 map.addLayer({
                   'id': '3d-buildings',
@@ -396,17 +354,72 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                     'fill-extrusion-opacity': 0.85
                   }
                 });
-
-                setDebugInfo("3D buildings added");
               } catch (e) {
                 console.warn("Failed to add 3D buildings:", e);
-                setDebugInfo("Could not add 3D buildings");
+              }
+            }
+
+            // Add building shadows layer (re-add if removed by terrain style reload)
+            if (!map.getLayer('building-shadows')) {
+              try {
+                map.addLayer({
+                  'id': 'building-shadows',
+                  'source': 'openmaptiles',
+                  'source-layer': 'building',
+                  'type': 'fill',
+                  'minzoom': 14,
+                  'paint': {
+                    'fill-color': '#1a1a2e',
+                    'fill-opacity': 0,
+                    'fill-translate': [0, 0],
+                    'fill-translate-anchor': 'map'
+                  }
+                });
+              } catch (e) {
+                console.warn("Failed to add building shadows:", e);
+              }
+            }
+
+            // Add terrain DEM source and enable 3D terrain for Hong Kong
+            if (useTerrain && !map.getSource('terrain-dem')) {
+              try {
+                map.addSource('terrain-dem', {
+                  type: 'raster-dem',
+                  tiles: [
+                    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+                  ],
+                  encoding: 'terrarium',
+                  tileSize: 256,
+                  maxzoom: 13,
+                });
+              } catch (e) {
+                console.warn("Failed to add terrain source:", e);
+              }
+            }
+            if (useTerrain && map.setTerrain) {
+              try {
+                map.setTerrain({
+                  source: 'terrain-dem',
+                  exaggeration: 1.5,
+                });
+              } catch (e) {
+                console.warn("Failed to set terrain:", e);
               }
             }
 
           } catch (e) {
             console.error("Error modifying style:", e);
             setDebugInfo(`Error modifying style: ${e}`);
+          }
+        };
+
+        map.on("styleload", setupStyle);
+
+        // Re-add custom layers if terrain triggers a style reload
+        map.on("styledata", () => {
+          if (cancelled || !styleInitialized) return;
+          if (!map.getLayer('3d-buildings') || !map.getLayer('building-shadows')) {
+            setupStyle();
           }
         });
 
@@ -505,8 +518,15 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
         map.on("error", (e: any) => {
           if (cancelled) return;
+          const errType = e?.error?.type || '';
+          const errMsg = e?.error?.message || 'Unknown error';
+          // Don't treat tile/source loading errors as fatal (terrain DEM tiles, etc.)
+          if (errType === 'source' || errType === 'tile' || errType.includes('tile') || errType.includes('source')) {
+            console.warn('Map tile/source error:', errMsg);
+            return;
+          }
           console.error("Map error:", e);
-          setDebugInfo(`Map error: ${e?.error?.message || 'Unknown error'}`);
+          setDebugInfo(`Map error: ${errMsg}`);
           window.clearTimeout(timeoutId);
           setMapError(true);
         });
