@@ -1,6 +1,8 @@
 export const METERS_PER_DEG = 111320;
 export const AVG_BUILDING_HEIGHT_M = 15;
 
+export type TerrainSampler = (lng: number, lat: number) => number | null;
+
 export type SurfacePatch = {
   id: string;
   type: "roof" | "wall";
@@ -17,6 +19,7 @@ export type NearbyBuilding = {
   lng: number;
   height: number;
   baseHeight: number;
+  groundElevation: number;
 };
 
 export type HeatmapResult = {
@@ -30,5 +33,6 @@ export type FocusedBuilding = {
   lng: number;
   height: number;
   baseHeight: number;
+  groundElevation: number;
   geometry: any;
 } | null;

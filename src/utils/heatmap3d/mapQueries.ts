@@ -3,12 +3,14 @@ import {
   AVG_BUILDING_HEIGHT_M,
   type NearbyBuilding,
   type FocusedBuilding,
+  type TerrainSampler,
 } from "./types";
 import { buildingCentroid, allPolygonRings, polygonCentroid } from "./geometry";
 
 export function queryNearbyBuildings(
   map: any,
   focusedBuilding: NonNullable<FocusedBuilding>,
+  terrainSampler?: TerrainSampler | null,
 ): NearbyBuilding[] {
   if (!map || !map.getLayer("3d-buildings")) return [];
 
@@ -68,7 +70,9 @@ export function queryNearbyBuildings(
 
         if (distM < 5) continue;
 
-        nearbyBuildings.push({ lat, lng, height: h, baseHeight: bh });
+        const groundElevation = terrainSampler ? (terrainSampler(lng, lat) ?? 0) : 0;
+
+        nearbyBuildings.push({ lat, lng, height: h, baseHeight: bh, groundElevation });
       }
     }
   } catch (e) {

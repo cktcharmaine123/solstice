@@ -98,6 +98,8 @@ export type TranslationKey =
   | "threed.cancelSelection"
   | "threed.noBuildingFound"
   | "threed.transitioning"
+  | "threed.terrainActive"
+  | "threed.terrainLoading"
   | "settings.title"
   | "settings.language"
   | "settings.privacyPolicy"
@@ -207,6 +209,8 @@ const en: Dictionary = {
   "threed.cancelSelection": "Cancel",
   "threed.noBuildingFound": "No building found, try tapping a building",
   "threed.transitioning": "Switching to 2D map...",
+  "threed.terrainActive": "Terrain",
+  "threed.terrainLoading": "Loading terrain...",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -318,6 +322,8 @@ const zhTW: Dictionary = {
   "threed.cancelSelection": "取消",
   "threed.noBuildingFound": "找不到建築物，請再試一次",
   "threed.transitioning": "切換至2D地圖...",
+  "threed.terrainActive": "地形",
+  "threed.terrainLoading": "載入地形中...",
 
   "settings.title": "設定",
   "settings.language": "語言",

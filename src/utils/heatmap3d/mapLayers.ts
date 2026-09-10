@@ -45,6 +45,7 @@ function removeHeatmapLayers(map: any): void {
 }
 
 function addHighlightLayer(map: any, focusedBuilding: NonNullable<FocusedBuilding>): void {
+  const groundElev = focusedBuilding.groundElevation ?? 0;
   try {
     map.addSource(HIGHLIGHT_SOURCE, {
       type: "geojson",
@@ -61,8 +62,8 @@ function addHighlightLayer(map: any, focusedBuilding: NonNullable<FocusedBuildin
       minzoom: 14,
       paint: {
         "fill-extrusion-color": "#a8a8a8",
-        "fill-extrusion-height": focusedBuilding.height,
-        "fill-extrusion-base": focusedBuilding.baseHeight,
+        "fill-extrusion-height": groundElev + focusedBuilding.height,
+        "fill-extrusion-base": groundElev + focusedBuilding.baseHeight,
         "fill-extrusion-opacity": 0.3,
       },
     });

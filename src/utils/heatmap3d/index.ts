@@ -5,6 +5,7 @@ export {
   type NearbyBuilding,
   type HeatmapResult,
   type FocusedBuilding,
+  type TerrainSampler,
 } from "./types";
 
 export {
@@ -28,3 +29,10 @@ export { deduplicateFeatures, type SelectedBuilding } from "./buildingSelection"
 export { queryNearbyBuildings } from "./mapQueries";
 
 export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./mapLayers";
+
+export {
+  createTerrainSampler,
+  preloadTerrainTiles,
+  isTerrainReady,
+  clearTerrainCache,
+} from "./terrain";

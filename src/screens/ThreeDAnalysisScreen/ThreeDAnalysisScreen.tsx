@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon } from "lucide-react";
+import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon, MountainIcon } from "lucide-react";
 import * as SunCalc from "suncalc";
 import lookupTimezone from "tz-lookup";
 import { Button } from "../../components/ui/button";
@@ -14,11 +14,16 @@ import {
   renderHeatmapLayers,
   setHoverHighlight,
   removeHoverHighlight,
+  createTerrainSampler,
+  preloadTerrainTiles,
+  isTerrainReady,
+  clearTerrainCache,
   METERS_PER_DEG,
   AVG_BUILDING_HEIGHT_M,
   type SurfacePatch,
   type FocusedBuilding,
   type SelectedBuilding,
+  type TerrainSampler,
 } from "../../utils/heatmap3d";
 import {
   isValidDate,
@@ -48,6 +53,12 @@ const DEFAULT_ZOOM = 16;
 const DEFAULT_PITCH = 60;
 const SUN_GROUND_DIST_M = 250;
 
+const HK_BBOX = { minLng: 113.8, maxLng: 114.5, minLat: 22.15, maxLat: 22.6 };
+
+function isInHongKong(lng: number, lat: number): boolean {
+  return lng >= HK_BBOX.minLng && lng <= HK_BBOX.maxLng && lat >= HK_BBOX.minLat && lat <= HK_BBOX.maxLat;
+}
+
 type SelectionMode = "idle" | "to2d" | "selecting" | "to3d";
 
 type SeasonalPreset = {
@@ -70,6 +81,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const selectionModeRef = useRef<SelectionMode>("idle");
   const savedCameraRef = useRef<{ pitch: number; zoom: number; center: [number, number]; bearing: number } | null>(null);
+  const terrainSamplerRef = useRef<TerrainSampler | null>(null);
   const navigate = useNavigate();
   const { t } = useLanguage();
   const tRef = useRef(t);
@@ -87,16 +99,20 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const [focusedBuilding, setFocusedBuilding] = useState<FocusedBuilding>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [heatmapPatches, setHeatmapPatches] = useState<SurfacePatch[]>([]);
+  const [terrainEnabled, setTerrainEnabled] = useState(false);
+  const [terrainLoading, setTerrainLoading] = useState(false);
 
   const rawLat = searchParams.get("lat") ?? sessionStorage.getItem("siteLat");
   const rawLng = searchParams.get("lng") ?? sessionStorage.getItem("siteLng");
 
-  const lat = rawLat !== null && rawLat !== "undefined" ? Number(rawLat) : NaN;
+  const lat = rawLat !== null && rawLng !== "undefined" ? Number(rawLat) : NaN;
   const lng = rawLng !== null && rawLng !== "undefined" ? Number(rawLng) : NaN;
 
   const hasCoords =
     !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
   const center: [number, number] = hasCoords ? [lng, lat] : DEFAULT_CENTER;
+
+  const useTerrain = hasCoords ? isInHongKong(lng, lat) : isInHongKong(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
 
   const locationTimeZone = useMemo<string | undefined>(() => {
     if (!hasCoords) return undefined;
@@ -128,6 +144,33 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   useEffect(() => {
     selectionModeRef.current = selectionMode;
   }, [selectionMode]);
+
+  // Preload terrain tiles when in Hong Kong
+  useEffect(() => {
+    if (!useTerrain) {
+      setTerrainEnabled(false);
+      terrainSamplerRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    setTerrainLoading(true);
+
+    preloadTerrainTiles(center[0], center[1], 3).then(() => {
+      if (cancelled) return;
+      terrainSamplerRef.current = createTerrainSampler();
+      setTerrainEnabled(true);
+      setTerrainLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setTerrainLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center[0], center[1], useTerrain]);
 
   // Handle camera transitions for 2D selection mode
   useEffect(() => {
@@ -218,7 +261,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           antialias: true
         });
 
-        map.once("style.load", () => {
+        map.once("styleload", () => {
           if (cancelled) return;
           setDebugInfo("Style loaded, applying monochrome filter...");
 
@@ -278,6 +321,33 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             });
 
             setDebugInfo("Applied monochrome colors to base map");
+
+            // Add terrain DEM source and enable 3D terrain for Hong Kong
+            if (useTerrain) {
+              try {
+                if (!map.getSource('terrain-dem')) {
+                  map.addSource('terrain-dem', {
+                    type: 'raster-dem',
+                    tiles: [
+                      'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+                    ],
+                    encoding: 'terrarium',
+                    tileSize: 256,
+                    maxzoom: 13,
+                  });
+                }
+                if (map.setTerrain) {
+                  map.setTerrain({
+                    source: 'terrain-dem',
+                    exaggeration: 1.5,
+                  });
+                  setDebugInfo("Terrain enabled");
+                }
+              } catch (e) {
+                console.warn("Failed to add terrain:", e);
+                setDebugInfo("Terrain unavailable, using flat ground");
+              }
+            }
 
             if (!map.getLayer('building-shadows')) {
               try {
@@ -359,7 +429,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
          map.on("click", (e: any) => {
   if (selectionModeRef.current !== "selecting") return;
 
-  // 1. Create a 10x10px search box around the click point so clicks don't miss thin edges
   const bbox: [[number, number], [number, number]] = [
     [e.point.x - 5, e.point.y - 5],
     [e.point.x + 5, e.point.y + 5],
@@ -378,7 +447,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const tapLng = e.lngLat.lng;
   const tapLat = e.lngLat.lat;
 
-  // 2. Uses the updated deduplicateFeatures logic to prioritize towers over ground podiums
   const selection = deduplicateFeatures(features, tapLng, tapLat);
   if (!selection) {
     setSelectionMessage(tRef.current("threed.noBuildingFound"));
@@ -398,6 +466,9 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               bestFeature.feature.properties?.render_min_height ??
               bestFeature.feature.properties?.min_height ??
               0;
+            const groundElevation = terrainSamplerRef.current
+              ? (terrainSamplerRef.current(blng, blat) ?? 0)
+              : 0;
             removeHoverHighlight(map);
             setFocusedBuilding({
               id,
@@ -405,6 +476,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               lng: blng,
               height: Number(height) || AVG_BUILDING_HEIGHT_M,
               baseHeight: Number(baseHeight) || 0,
+              groundElevation,
               geometry: bestFeature.geometry,
             });
             setSelectionMode("to3d");
@@ -672,7 +744,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     setAnalyzing(true);
     const map = mapRef.current;
     const calc = () => {
-      const nearbyBuildings = queryNearbyBuildings(map, focusedBuilding);
+      const nearbyBuildings = queryNearbyBuildings(map, focusedBuilding, terrainSamplerRef.current);
 
       const result = calculate3DHeatmap(
         focusedBuilding.geometry,
@@ -682,13 +754,17 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         focusedBuilding.lat,
         selectedDate,
         nearbyBuildings,
+        5,
+        8,
+        terrainSamplerRef.current,
+        focusedBuilding.groundElevation,
       );
       setHeatmapPatches(result.patches);
       setAnalyzing(false);
     };
     const timer = setTimeout(calc, 50);
     return () => clearTimeout(timer);
-  }, [focusedBuilding, selectedDate, hasCoords]);
+  }, [focusedBuilding, selectedDate, hasCoords, terrainEnabled]);
 
   // Render 3D heatmap patches as fill-extrusion layers
   useEffect(() => {
@@ -783,30 +859,48 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         >
           <ArrowLeftIcon className="h-5 w-5 stroke-[2.25]" aria-hidden="true" />
         </Button>
-        {mapReady && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              if (selectionMode === "idle") {
-                setSelectionMode("to2d");
-              } else if (selectionMode === "selecting") {
-                setSelectionMode("to3d");
-              }
-            }}
-            aria-label={t("threed.focusBuilding")}
-            className={`pointer-events-auto flex h-10 items-center gap-1.5 rounded-full px-3 shadow-sm backdrop-blur-sm transition-colors md:h-12 md:px-4 ${
-              selectionMode !== "idle"
-                ? "bg-[#7a4a4a] text-white hover:bg-[#6b3f3f]"
-                : "bg-white/90 text-[#7a4a4a] hover:bg-white"
-            }`}
-          >
-            <Building2Icon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
-            <span className="font-['Inter'] text-xs font-medium md:text-sm">
-              {selectionMode !== "idle" ? t("threed.cancelSelection") : t("threed.focusBuilding")}
-            </span>
-          </Button>
-        )}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {terrainEnabled && mapReady && selectionMode === "idle" && (
+            <div className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+              <MountainIcon className="h-3.5 w-3.5 text-[#7a4a4a]" aria-hidden="true" />
+              <span className="font-['Inter'] text-[11px] font-medium text-[#7a4a4a]">
+                {t("threed.terrainActive")}
+              </span>
+            </div>
+          )}
+          {terrainLoading && mapReady && (
+            <div className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+              <RefreshCwIcon className="h-3.5 w-3.5 animate-spin text-[#7a4a4a]" aria-hidden="true" />
+              <span className="font-['Inter'] text-[11px] font-medium text-[#7a4a4a]">
+                {t("threed.terrainLoading")}
+              </span>
+            </div>
+          )}
+          {mapReady && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                if (selectionMode === "idle") {
+                  setSelectionMode("to2d");
+                } else if (selectionMode === "selecting") {
+                  setSelectionMode("to3d");
+                }
+              }}
+              aria-label={t("threed.focusBuilding")}
+              className={`flex h-10 items-center gap-1.5 rounded-full px-3 shadow-sm backdrop-blur-sm transition-colors md:h-12 md:px-4 ${
+                selectionMode !== "idle"
+                  ? "bg-[#7a4a4a] text-white hover:bg-[#6b3f3f]"
+                  : "bg-white/90 text-[#7a4a4a] hover:bg-white"
+              }`}
+            >
+              <Building2Icon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
+              <span className="font-['Inter'] text-xs font-medium md:text-sm">
+                {selectionMode !== "idle" ? t("threed.cancelSelection") : t("threed.focusBuilding")}
+              </span>
+            </Button>
+          )}
+        </div>
       </header>
 
       {mapReady && selectionMode !== "idle" && (
