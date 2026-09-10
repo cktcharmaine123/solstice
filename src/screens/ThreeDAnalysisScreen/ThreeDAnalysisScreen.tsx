@@ -184,6 +184,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         center: [map.getCenter().lng, map.getCenter().lat],
         bearing: map.getBearing(),
       };
+      // Disable terrain so buildings sit flat on the map and can be tapped reliably
+      if (map.getTerrain) {
+        try { map.setTerrain(null); } catch (e) { /* ignore */ }
+      }
       map.once("moveend", () => {
         if (selectionModeRef.current === "to2d") setSelectionMode("selecting");
       });
@@ -195,6 +199,12 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       });
     } else if (selectionMode === "to3d") {
       removeHoverHighlight(map);
+      // Re-enable terrain when returning to 3D view
+      if (useTerrain && map.setTerrain && map.getSource('terrain-dem')) {
+        try {
+          map.setTerrain({ source: 'terrain-dem', exaggeration: 1.0 });
+        } catch (e) { /* ignore */ }
+      }
       const targetCenter: [number, number] = focusedBuilding
         ? [focusedBuilding.lng, focusedBuilding.lat]
         : (savedCameraRef.current?.center ?? center);
@@ -430,7 +440,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             try {
               map.setTerrain({
                 source: 'terrain-dem',
-                exaggeration: 1.5,
+                exaggeration: 1.0,
               });
             } catch (e) {
               console.warn("Failed to set terrain:", e);
