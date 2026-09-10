@@ -390,6 +390,27 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               }
             }
 
+            // Add invisible fill layer for building selection queries.
+            // queryRenderedFeatures on fill-extrusion layers is unreliable when terrain is enabled;
+            // a flat fill layer on the same source returns correct hit-test results regardless of terrain.
+            if (!map.getLayer('building-selection')) {
+              try {
+                map.addLayer({
+                  'id': 'building-selection',
+                  'source': 'openmaptiles',
+                  'source-layer': 'building',
+                  'type': 'fill',
+                  'minzoom': 14,
+                  'paint': {
+                    'fill-color': '#000000',
+                    'fill-opacity': 0,
+                  }
+                });
+              } catch (e) {
+                console.warn("Failed to add building selection layer:", e);
+              }
+            }
+
           } catch (e) {
             console.error("Error modifying style:", e);
             setDebugInfo(`Error modifying style: ${e}`);
@@ -401,7 +422,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         // Re-add custom layers if terrain triggers a style reload
         map.on("styledata", () => {
           if (cancelled || !styleInitialized) return;
-          if (!map.getLayer('3d-buildings') || !map.getLayer('building-shadows')) {
+          if (!map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection')) {
             setupStyle();
           }
         });
@@ -458,7 +479,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   ];
 
   const features = map.queryRenderedFeatures(bbox, {
-    layers: ["3d-buildings"],
+    layers: ["building-selection"],
   });
 
   if (!features || features.length === 0) {
@@ -511,7 +532,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               return;
             }
             const features = map.queryRenderedFeatures(e.point, {
-              layers: ["3d-buildings"],
+              layers: ["building-selection"],
             });
             if (!features || features.length === 0) {
               removeHoverHighlight(map);

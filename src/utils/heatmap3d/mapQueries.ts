@@ -12,7 +12,8 @@ export function queryNearbyBuildings(
   focusedBuilding: NonNullable<FocusedBuilding>,
   terrainSampler?: TerrainSampler | null,
 ): NearbyBuilding[] {
-  if (!map || !map.getLayer("3d-buildings")) return [];
+  const queryLayer = map.getLayer("building-selection") ? "building-selection" : "3d-buildings";
+  if (!map || !map.getLayer(queryLayer)) return [];
 
   const nearbyBuildings: NearbyBuilding[] = [];
   try {
@@ -31,7 +32,7 @@ export function queryNearbyBuildings(
         [centerPoint.x - 300, centerPoint.y - 300],
         [centerPoint.x + 300, centerPoint.y + 300],
       ],
-      { layers: ["3d-buildings"] },
+      { layers: [queryLayer] },
     );
 
     const seen = new Set<string | number>();
