@@ -22,10 +22,12 @@ export function renderHeatmapLayers(
     }
   }
 
-  try {
-    map.setPaintProperty("3d-buildings", "fill-extrusion-color", "#d4d4d4");
-  } catch (e) {
-    console.warn("Failed to reset building color:", e);
+  if (map.getLayer("3d-buildings")) {
+    try {
+      map.setPaintProperty("3d-buildings", "fill-extrusion-color", "#d4d4d4");
+    } catch (e) {
+      console.warn("Failed to reset building color:", e);
+    }
   }
 }
 

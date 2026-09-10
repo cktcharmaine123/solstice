@@ -380,33 +380,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               }
             }
 
-            // Add terrain DEM source and enable 3D terrain for Hong Kong
-            if (useTerrain && !map.getSource('terrain-dem')) {
-              try {
-                map.addSource('terrain-dem', {
-                  type: 'raster-dem',
-                  tiles: [
-                    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
-                  ],
-                  encoding: 'terrarium',
-                  tileSize: 256,
-                  maxzoom: 13,
-                });
-              } catch (e) {
-                console.warn("Failed to add terrain source:", e);
-              }
-            }
-            if (useTerrain && map.setTerrain) {
-              try {
-                map.setTerrain({
-                  source: 'terrain-dem',
-                  exaggeration: 1.5,
-                });
-              } catch (e) {
-                console.warn("Failed to set terrain:", e);
-              }
-            }
-
           } catch (e) {
             console.error("Error modifying style:", e);
             setDebugInfo(`Error modifying style: ${e}`);
@@ -436,6 +409,33 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           setDebugInfo("Map loaded successfully!");
           setMapReady(true);
           mapRef.current = map;
+
+          // Set up terrain once after initial load to avoid style-reload cycles
+          if (useTerrain && map.setTerrain) {
+            if (!map.getSource('terrain-dem')) {
+              try {
+                map.addSource('terrain-dem', {
+                  type: 'raster-dem',
+                  tiles: [
+                    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+                  ],
+                  encoding: 'terrarium',
+                  tileSize: 256,
+                  maxzoom: 13,
+                });
+              } catch (e) {
+                console.warn("Failed to add terrain source:", e);
+              }
+            }
+            try {
+              map.setTerrain({
+                source: 'terrain-dem',
+                exaggeration: 1.5,
+              });
+            } catch (e) {
+              console.warn("Failed to set terrain:", e);
+            }
+          }
 
           map.on("move", () => setViewVersion((v) => v + 1));
 
@@ -520,9 +520,9 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           if (cancelled) return;
           const errType = e?.error?.type || '';
           const errMsg = e?.error?.message || 'Unknown error';
-          // Don't treat tile/source loading errors as fatal (terrain DEM tiles, etc.)
-          if (errType === 'source' || errType === 'tile' || errType.includes('tile') || errType.includes('source')) {
-            console.warn('Map tile/source error:', errMsg);
+          // Don't treat tile/source/layer errors as fatal (terrain DEM tiles, style reloads, etc.)
+          if (errType === 'source' || errType === 'tile' || errType.includes('tile') || errType.includes('source') || errType.includes('layer') || errMsg.includes('layer') || errMsg.includes('does not exist')) {
+            console.warn('Map non-fatal error:', errMsg);
             return;
           }
           console.error("Map error:", e);
