@@ -299,6 +299,23 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
               remainingLayers.forEach((layer: any) => {
                 try {
+                  if (layer.type === 'background') {
+                    map.setPaintProperty(layer.id, 'background-color', '#f0f0f0');
+                    return;
+                  }
+
+                  if (layer.type === 'raster') {
+                    map.setPaintProperty(layer.id, 'raster-saturation', 0);
+                    return;
+                  }
+
+                  if (layer.type === 'hillshade') {
+                    map.setPaintProperty(layer.id, 'hillshade-shadow-color', '#999999');
+                    map.setPaintProperty(layer.id, 'hillshade-highlight-color', '#cccccc');
+                    map.setPaintProperty(layer.id, 'hillshade-accent-color', '#aaaaaa');
+                    return;
+                  }
+
                   if (layer.type === 'fill-extrusion') {
                     const paint = layer.paint || {};
                     if (paint['fill-extrusion-color']) {
