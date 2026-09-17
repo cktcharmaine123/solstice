@@ -299,7 +299,13 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
               remainingLayers.forEach((layer: any) => {
                 try {
-                  if (layer.type === 'fill-extrusion') return;
+                  if (layer.type === 'fill-extrusion') {
+                    const paint = layer.paint || {};
+                    if (paint['fill-extrusion-color']) {
+                      map.setPaintProperty(layer.id, 'fill-extrusion-color', '#d4d4d4');
+                    }
+                    return;
+                  }
 
                   if (layer.type === 'fill') {
                     const paint = layer.paint || {};
