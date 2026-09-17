@@ -184,10 +184,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         center: [map.getCenter().lng, map.getCenter().lat],
         bearing: map.getBearing(),
       };
-      // Flatten terrain without removing it (removing triggers a style reload that drops custom layers)
-      if (map.getTerrain && map.getSource('terrain-dem')) {
-        try { map.setTerrain({ source: 'terrain-dem', exaggeration: 0 }); } catch (e) { /* ignore */ }
-      }
       map.once("moveend", () => {
         if (selectionModeRef.current === "to2d") setSelectionMode("selecting");
       });
@@ -199,12 +195,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       });
     } else if (selectionMode === "to3d") {
       removeHoverHighlight(map);
-      // Re-enable terrain when returning to 3D view
-      if (useTerrain && map.setTerrain && map.getSource('terrain-dem')) {
-        try {
-          map.setTerrain({ source: 'terrain-dem', exaggeration: 1.0 });
-        } catch (e) { /* ignore */ }
-      }
       const targetCenter: [number, number] = focusedBuilding
         ? [focusedBuilding.lng, focusedBuilding.lat]
         : (savedCameraRef.current?.center ?? center);
@@ -271,13 +261,11 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           antialias: true
         });
 
-        let styleInitialized = false;
-
         const setupStyle = () => {
           if (cancelled) return;
 
           try {
-            if (!styleInitialized) {
+            {
               setDebugInfo("Style loaded, applying monochrome filter...");
 
               const layers = map.getStyle().layers;
@@ -335,7 +323,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               });
 
               setDebugInfo("Applied monochrome colors to base map");
-              styleInitialized = true;
             }
 
             // Add 3D buildings layer (re-add if removed by terrain style reload)
@@ -421,7 +408,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
         // Re-add custom layers if terrain triggers a style reload
         map.on("styledata", () => {
-          if (cancelled || !styleInitialized) return;
+          if (cancelled || !map.isStyleLoaded()) return;
           if (!map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection')) {
             setupStyle();
           }
