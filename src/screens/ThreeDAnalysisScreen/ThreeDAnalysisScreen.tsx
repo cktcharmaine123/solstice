@@ -270,19 +270,9 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
               const layers = map.getStyle().layers;
 
+              // Remove ALL symbol layers (labels, POIs, road shields, arrows, etc.)
               const layersToRemove = layers
-                .filter((layer: any) => {
-                  const layerId = layer.id.toLowerCase();
-                  const layerType = layer.type;
-                  const sourceLayer = layer['source-layer'] || '';
-
-                  if (layerType === 'symbol') return true;
-                  if (sourceLayer.includes('poi') || sourceLayer.includes('place')) return true;
-                  if (layerId.includes('label') || layerId.includes('name') || layerId.includes('text')) return true;
-                  if (sourceLayer.includes('building')) return false;
-
-                  return false;
-                })
+                .filter((layer: any) => layer.type === 'symbol')
                 .map((layer: any) => layer.id);
 
               layersToRemove.forEach((layerId: string) => {
@@ -305,14 +295,14 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                   }
 
                   if (layer.type === 'raster') {
-                    map.setPaintProperty(layer.id, 'raster-saturation', 0);
+                    try { map.setPaintProperty(layer.id, 'raster-saturation', -1); } catch (e) { /* not all raster layers support it */ }
                     return;
                   }
 
                   if (layer.type === 'hillshade') {
-                    map.setPaintProperty(layer.id, 'hillshade-shadow-color', '#999999');
-                    map.setPaintProperty(layer.id, 'hillshade-highlight-color', '#cccccc');
-                    map.setPaintProperty(layer.id, 'hillshade-accent-color', '#aaaaaa');
+                    try { map.setPaintProperty(layer.id, 'hillshade-shadow-color', '#999999'); } catch (e) { /* ignore */ }
+                    try { map.setPaintProperty(layer.id, 'hillshade-highlight-color', '#cccccc'); } catch (e) { /* ignore */ }
+                    try { map.setPaintProperty(layer.id, 'hillshade-accent-color', '#aaaaaa'); } catch (e) { /* ignore */ }
                     return;
                   }
 
@@ -326,18 +316,21 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
                   if (layer.type === 'fill') {
                     const paint = layer.paint || {};
-                    const fillColor = paint['fill-color'];
-                    if (fillColor) {
-                      map.setPaintProperty(layer.id, 'fill-color', '#e0e0e0');
+                    // Clear any fill-pattern (e.g. wetland, pedestrian polygon) and replace with grey
+                    if (paint['fill-pattern']) {
+                      try { map.setPaintProperty(layer.id, 'fill-pattern', null); } catch (e) { /* ignore */ }
                     }
+                    try { map.setPaintProperty(layer.id, 'fill-color', '#e0e0e0'); } catch (e) { /* ignore */ }
+                    try { map.setPaintProperty(layer.id, 'fill-outline-color', '#cccccc'); } catch (e) { /* ignore */ }
+                    return;
                   }
 
                   if (layer.type === 'line') {
                     const paint = layer.paint || {};
-                    const lineColor = paint['line-color'];
-                    if (lineColor) {
-                      map.setPaintProperty(layer.id, 'line-color', '#666666');
+                    if (paint['line-color']) {
+                      try { map.setPaintProperty(layer.id, 'line-color', '#666666'); } catch (e) { /* ignore */ }
                     }
+                    return;
                   }
 
                 } catch (e) {
