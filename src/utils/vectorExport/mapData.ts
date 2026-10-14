@@ -2,11 +2,10 @@ import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader as Pbf } from "pbf";
 import type { LocalFrame } from "../heatmap3d/geometry";
 import { clipLine, clipRing, diagramFrame } from "./geometry";
-import type { DiagramSpec, MapOutlines, PolygonRings, Pt, RoadClass, StreetLabel } from "./types";
+import type { DiagramSpec, MapOutlines, PolygonRings, Pt, RoadClass } from "./types";
 
 const TILEJSON_URL = "https://tiles.openfreemap.org/planet";
 export const MAP_TILE_ZOOM = 14;
-const LABEL_MIN_LENGTH_M = 40;
 
 const ROAD_STYLE: Record<string, { cls: RoadClass; widthM: number }> = {
   motorway: { cls: "major", widthM: 14 },
@@ -60,25 +59,6 @@ function linesOf(geometry: any, frame: LocalFrame, h: number): Pt[][] {
   const lines: number[][][] =
     geometry.type === "LineString" ? [geometry.coordinates] : geometry.type === "MultiLineString" ? geometry.coordinates : [];
   return lines.flatMap((line) => clipLine(line.map(([lng, lat]) => frame.toLocal(lng, lat)), h));
-}
-
-function longestSegmentLabel(text: string, lines: Pt[][]): StreetLabel | null {
-  let best: StreetLabel | null = null;
-  let bestLen = LABEL_MIN_LENGTH_M;
-  for (const line of lines) {
-    for (let i = 0; i < line.length - 1; i++) {
-      const [ax, ay] = line[i];
-      const [bx, by] = line[i + 1];
-      const len = Math.hypot(bx - ax, by - ay);
-      if (len <= bestLen) continue;
-      bestLen = len;
-      let angle = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
-      if (angle > 90) angle -= 180;
-      if (angle <= -90) angle += 180;
-      best = { text, x: (ax + bx) / 2, y: (ay + by) / 2, angleDeg: angle };
-    }
-  }
-  return best;
 }
 
 export type MapTile = { x: number; y: number; tile: VectorTile };
@@ -149,8 +129,7 @@ export async function fetchMapOutlines(spec: Pick<DiagramSpec, "center" | "halfE
 export function outlinesFromTiles(tiles: MapTile[], spec: Pick<DiagramSpec, "center" | "halfExtentM">): MapOutlines {
   const frame = diagramFrame(spec);
   const h = spec.halfExtentM;
-  const out: MapOutlines = { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [], labels: [] };
-  const namedLines = new Map<string, Pt[][]>();
+  const out = emptyMapOutlines();
 
   for (const tile of tiles) {
     eachFeature(tile, "park", (_p, g) => out.parks.push(...polygonsOf(g, frame, h)));
@@ -171,17 +150,6 @@ export function outlinesFromTiles(tiles: MapTile[], spec: Pick<DiagramSpec, "cen
       if (!style) return;
       for (const line of lines) out.roads.push({ ...style, line });
     });
-    eachFeature(tile, "transportation_name", (p, g) => {
-      const name = typeof p.name === "string" ? p.name.trim() : "";
-      if (!name) return;
-      const lines = linesOf(g, frame, h);
-      if (lines.length > 0) namedLines.set(name, [...(namedLines.get(name) ?? []), ...lines]);
-    });
-  }
-
-  for (const [name, lines] of namedLines) {
-    const label = longestSegmentLabel(name, lines);
-    if (label) out.labels.push(label);
   }
 
   return out;
@@ -205,5 +173,5 @@ export function buildingsFromTiles(tiles: MapTile[]): TileBuildings[] {
 }
 
 export function emptyMapOutlines(): MapOutlines {
-  return { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [], labels: [] };
+  return { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [] };
 }

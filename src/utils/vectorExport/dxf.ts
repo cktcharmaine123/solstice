@@ -22,7 +22,6 @@ export function buildDiagramDxf(spec: DiagramSpec, map: MapOutlines): string {
     { name: "MAP-ROADS-MINOR", color: 253, linetype: "CONTINUOUS" },
     { name: "MAP-PATHS", color: 254, linetype: "CONTINUOUS" },
     { name: "MAP-RAIL", color: 251, linetype: "DASHED" },
-    { name: "MAP-STREET-NAMES", color: 252, linetype: "CONTINUOUS" },
     ...pathLayers,
     { name: "SUN-AREA", color: 40, linetype: "CONTINUOUS" },
     { name: "SUN-MARKERS", color: 30, linetype: "CONTINUOUS" },
@@ -44,16 +43,11 @@ export function buildDiagramDxf(spec: DiagramSpec, map: MapOutlines): string {
     w.polyline(layer, road.line, false);
   }
   for (const line of map.railways) w.polyline("MAP-RAIL", line, false);
-  for (const l of map.labels) w.text("MAP-STREET-NAMES", [l.x, l.y], 2.5, l.text, { rotation: l.angleDeg, center: true });
 
   spec.paths.forEach((p, i) => {
     w.polyline(pathLayers[i].name, p.points.map(local), false);
     if (p.cone.length >= 3) w.polyline("SUN-AREA", p.cone.map(local), true);
-    if (p.marker) {
-      const m = local(p.marker);
-      w.circle("SUN-MARKERS", m, 2);
-      w.text("SUN-MARKERS", [m[0] + 3, m[1] + 3], 2, p.timeLabel);
-    }
+    if (p.marker) w.circle("SUN-MARKERS", local(p.marker), 2);
   });
 
   w.circle("SITE-CENTRE", [0, 0], 1);

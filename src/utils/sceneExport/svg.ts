@@ -24,7 +24,6 @@ const STYLE = {
   roadCasing: "#cfcac0",
   road: "#ffffff",
   rail: "#9a9a9a",
-  label: "#6b6b6b",
   building: "#dedede",
   buildingStroke: "#a9a9a9",
   selected: "#9fb0bf",
@@ -170,23 +169,6 @@ export function buildSceneSvg(scene: Scene3D): string {
   );
   parts.push(
     layer("Railways", scene.railways.map((l) => `<path d="${line(l)}" fill="none" stroke="${STYLE.rail}" stroke-width="1.2" stroke-dasharray="6 3"/>`).join("")),
-  );
-  const labelSize = Math.max(8, Math.min(12, 2.8 * s));
-  parts.push(
-    layer(
-      "Street names",
-      scene.labels
-        .map((l) => {
-          const t = (l.angleDeg * Math.PI) / 180;
-          const [dx, dy] = [Math.cos(t), Math.sin(t)];
-          let angle = (Math.atan2(-SIN_E * (dx + dy) * Math.SQRT1_2, (dx - dy) * Math.SQRT1_2) * 180) / Math.PI;
-          if (angle > 90) angle -= 180;
-          if (angle <= -90) angle += 180;
-          const [x, y] = toPx(l.at).map((v) => v.toFixed(1));
-          return `<text x="${x}" y="${y}" transform="rotate(${angle.toFixed(1)} ${x} ${y})" text-anchor="middle" dominant-baseline="central" font-size="${labelSize.toFixed(1)}" fill="${STYLE.label}" stroke="#ffffff" stroke-width="2.5" paint-order="stroke">${esc(l.text)}</text>`;
-        })
-        .join(""),
-    ),
   );
 
   const buildingFace = (f: SceneFace, base: string) => {

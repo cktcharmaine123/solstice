@@ -19,7 +19,6 @@ const STYLE = {
   roadCasing: "#c8c8c8",
   road: "#ffffff",
   rail: "#9a9a9a",
-  label: "#6b6b6b",
 };
 
 export function esc(text: string): string {
@@ -88,18 +87,6 @@ export function buildDiagramSvg(spec: DiagramSpec, map: MapOutlines): string {
   );
   mapBody.push(
     layer("Buildings", paths(map.buildings.map(polyPath), `fill="${STYLE.buildingFill}" stroke="${STYLE.buildingStroke}" stroke-width="0.8" fill-rule="evenodd"`)),
-  );
-  const labelSize = Math.max(9, Math.min(14, 3.2 * s));
-  mapBody.push(
-    layer(
-      "Street names",
-      map.labels
-        .map((l) => {
-          const [x, y] = px([l.x, l.y]).split(",");
-          return `<text x="${x}" y="${y}" transform="rotate(${(-l.angleDeg).toFixed(1)} ${x} ${y})" text-anchor="middle" dominant-baseline="central" font-size="${labelSize.toFixed(1)}" fill="${STYLE.label}" stroke="#ffffff" stroke-width="3" paint-order="stroke">${esc(l.text)}</text>`;
-        })
-        .join(""),
-    ),
   );
 
   mapBody.push(

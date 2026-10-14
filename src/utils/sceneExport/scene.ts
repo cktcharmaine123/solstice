@@ -267,7 +267,6 @@ export function buildScene3D(
     waterways: outlines.waterways.map((line) => drapeLine(line, grid)),
     roads: outlines.roads.map((r) => ({ cls: r.cls, widthM: r.widthM, line: drapeLine(r.line, grid) })),
     railways: outlines.railways.map((line) => drapeLine(line, grid)),
-    labels: outlines.labels.map((l) => ({ text: l.text, angleDeg: l.angleDeg, at: [l.x, l.y, gridHeight(grid, l.x, l.y) + 0.3] })),
     buildings: surroundingBuildings(tiles, frame, grid, h, focused),
     selected: selected?.faces ?? [],
     heatmap: hasHeatmap && selected ? heatmapFaces(input.patches, frame, selected.ground) : [],

@@ -27,8 +27,6 @@ export type ContourLevel = { level: number; segments: [Pt3, Pt3][] };
 
 export type DrapedRoad = { cls: RoadClass; widthM: number; line: Pt3[] };
 
-export type DrapedLabel = { text: string; at: Pt3; angleDeg: number };
-
 /**
  * Everything in a 3D export, in metres east (x) and north (y) of the origin,
  * with z the height above sea level (all zero when ground heights are unavailable).
@@ -48,7 +46,6 @@ export type Scene3D = {
   waterways: Pt3[][];
   roads: DrapedRoad[];
   railways: Pt3[][];
-  labels: DrapedLabel[];
   buildings: SceneFace[][];
   selected: SceneFace[];
   heatmap: HeatmapFace[];

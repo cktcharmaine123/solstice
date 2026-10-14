@@ -24,7 +24,6 @@ export function buildSceneDxf(scene: Scene3D): string {
     { name: "MAP-ROADS-MINOR", color: 253, linetype: "CONTINUOUS" },
     { name: "MAP-PATHS", color: 254, linetype: "CONTINUOUS" },
     { name: "MAP-RAIL", color: 251, linetype: "DASHED" },
-    { name: "MAP-STREET-NAMES", color: 252, linetype: "CONTINUOUS" },
     { name: "BUILDINGS-SURROUNDING", color: 9, linetype: "CONTINUOUS" },
     { name: "BUILDING-SELECTED", color: nearestAci("#8fa3b5"), linetype: "CONTINUOUS" },
     ...SUNLIGHT_BANDS.map((b) => ({ name: bandLayer(b.key), color: nearestAci(b.color), linetype: "CONTINUOUS" as const })),
@@ -68,10 +67,6 @@ export function buildSceneDxf(scene: Scene3D): string {
     w.polyline3d(layer, road.line.map(at), false);
   }
   for (const line of scene.railways) w.polyline3d("MAP-RAIL", line.map(at), false);
-  for (const l of scene.labels) {
-    const [x, y, z] = at(l.at);
-    w.text("MAP-STREET-NAMES", [x, y], 2.5, l.text, { rotation: l.angleDeg, center: true, z });
-  }
 
   for (const building of scene.buildings) for (const f of building) w.face("BUILDINGS-SURROUNDING", f.pts.map(at));
   for (const f of scene.selected) w.face("BUILDING-SELECTED", f.pts.map(at));
