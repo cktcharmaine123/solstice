@@ -19,6 +19,7 @@ import { Input } from "../../components/ui/input";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { useSplash } from "../SplashScreen/SplashContext";
 import type { TranslationKey } from "../../i18n/translations";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 
 // Fix default marker icon paths under bundlers like Vite
 const defaultIcon = L.icon({
@@ -278,6 +279,7 @@ function CompassControl(): null {
 export const HomeScreen = (): JSX.Element => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const isDesktop = useIsDesktop();
   const { signalMapRequested, signalMapReady } = useSplash();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [activeNavigation, setActiveNavigation] = useState("home");
@@ -481,8 +483,8 @@ export const HomeScreen = (): JSX.Element => {
         className="relative z-[1000] mt-auto flex h-[90px] w-full flex-col border-t-[0.5px] border-[#3c3c435c] bg-[#f9f9f9f0] backdrop-blur-[10px]"
         aria-label="Primary navigation"
       >
-        <div className="grid h-[49px] grid-cols-4">
-          {navigationItems.map(({ id, labelKey, Icon, iconClassName }) => {
+        <div className={`grid h-[49px] ${isDesktop ? "grid-cols-3" : "grid-cols-4"}`}>
+          {navigationItems.filter((item) => !isDesktop || item.labelKey !== "nav.graphs").map(({ id, labelKey, Icon, iconClassName }) => {
             const isHome = id === "home";
             return (
               <Button

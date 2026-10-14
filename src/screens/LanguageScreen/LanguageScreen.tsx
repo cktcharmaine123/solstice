@@ -3,6 +3,7 @@ import { ArrowLeft, Check, Home, Leaf, BarChart, Settings as Gear } from "lucide
 import { Button } from "../../components/ui/button";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { LANGUAGES, type Language } from "../../i18n/translations";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 
 const navigationItems = [
   { labelKey: "nav.home" as const, Icon: Home, path: "/home" },
@@ -14,6 +15,7 @@ const navigationItems = [
 export const LanguageScreen = (): JSX.Element => {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
+  const isDesktop = useIsDesktop();
 
   const handleSelect = (code: Language) => {
     setLanguage(code);
@@ -68,8 +70,8 @@ export const LanguageScreen = (): JSX.Element => {
         className="relative z-[1000] mt-auto flex h-[90px] w-full flex-col border-t-[0.5px] border-[#3c3c435c] bg-[#f9f9f9f0] backdrop-blur-[10px]"
         aria-label="Primary navigation"
       >
-        <div className="grid h-[49px] grid-cols-4">
-          {navigationItems.map(({ labelKey, Icon, path }) => {
+        <div className={`grid h-[49px] ${isDesktop ? "grid-cols-3" : "grid-cols-4"}`}>
+          {navigationItems.filter((item) => !isDesktop || item.labelKey !== "nav.graphs").map(({ labelKey, Icon, path }) => {
             const isCurrent = labelKey === "nav.settings";
             return (
               <Button

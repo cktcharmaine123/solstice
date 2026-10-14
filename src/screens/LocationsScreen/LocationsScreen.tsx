@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 import { clearPendingAnalysisState, clearPendingRevert, peekPendingRevert, type RevertInfo } from "../../utils/revertStore";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 
 type SavedLocation = {
   id: string;
@@ -26,6 +27,7 @@ export const LocationsScreen = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
+  const isDesktop = useIsDesktop();
   const hasRevert = (location.state as { hasRevert?: boolean } | null)?.hasRevert === true;
   const [revertInfo, setRevertInfo] = useState<RevertInfo | null>(
     hasRevert ? peekPendingRevert() : null,
@@ -250,8 +252,8 @@ export const LocationsScreen = (): JSX.Element => {
       </section>
 
       <nav className="relative z-[1000] mt-auto flex h-[90px] w-full flex-col border-t-[0.5px] border-[#3c3c435c] bg-[#f9f9f9f0] backdrop-blur-[10px]" aria-label="Primary navigation">
-        <div className="grid h-[49px] grid-cols-4">
-          {navigationItems.map(({ labelKey, Icon, path }) => {
+        <div className={`grid h-[49px] ${isDesktop ? "grid-cols-3" : "grid-cols-4"}`}>
+          {navigationItems.filter((item) => !isDesktop || item.labelKey !== "nav.graphs").map(({ labelKey, Icon, path }) => {
             const isCurrent = labelKey === "nav.locations";
             return (
             <Button

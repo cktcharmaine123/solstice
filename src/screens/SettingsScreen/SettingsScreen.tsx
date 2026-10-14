@@ -3,6 +3,7 @@ import { ChevronRight, Home, Leaf, BarChart, Settings as Gear } from "lucide-rea
 import { Button } from "../../components/ui/button";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 
 const navigationItems: { labelKey: TranslationKey; Icon: typeof Home; path: string }[] = [
   { labelKey: "nav.home", Icon: Home, path: "/home" },
@@ -14,6 +15,7 @@ const navigationItems: { labelKey: TranslationKey; Icon: typeof Home; path: stri
 export const SettingsScreen = (): JSX.Element => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const isDesktop = useIsDesktop();
 
   return (
     <main className="app-container relative mx-auto flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-white">
@@ -65,8 +67,8 @@ export const SettingsScreen = (): JSX.Element => {
         className="relative z-[1000] mt-auto flex h-[90px] w-full flex-col border-t-[0.5px] border-[#3c3c435c] bg-[#f9f9f9f0] backdrop-blur-[10px]"
         aria-label="Primary navigation"
       >
-        <div className="grid h-[49px] grid-cols-4">
-          {navigationItems.map(({ labelKey, Icon, path }) => {
+        <div className={`grid h-[49px] ${isDesktop ? "grid-cols-3" : "grid-cols-4"}`}>
+          {navigationItems.filter((item) => !isDesktop || item.labelKey !== "nav.graphs").map(({ labelKey, Icon, path }) => {
             const isCurrent = labelKey === "nav.settings";
             return (
               <Button

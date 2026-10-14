@@ -1,12 +1,15 @@
 import {
   ArrowLeftIcon,
   BarChart,
+  BookmarkIcon,
   Box,
   CalendarDaysIcon,
+  DownloadIcon,
   Clock3Icon,
   Eye,
   EyeOff,
   Home,
+  ImageDownIcon,
   Leaf,
   PlusIcon,
   SearchIcon,
@@ -935,7 +938,7 @@ function AnalysisScreenContent(): JSX.Element {
         </Button>
         <section
           aria-label="Selected location"
-          className="absolute left-4 top-0 flex h-16 w-[calc(100%-32px)] items-center gap-3 rounded-xl bg-neutral-100 py-2 pl-3 pr-4"
+          className="absolute left-4 top-0 flex h-16 w-[calc(100%-32px)] items-center gap-3 rounded-xl bg-neutral-100 py-2 pl-3 pr-2"
         >
           <SearchIcon className="h-6 w-6 shrink-0 text-black" aria-hidden="true" />
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5">
@@ -964,38 +967,61 @@ function AnalysisScreenContent(): JSX.Element {
               <time>{formatClock(selectedDateTime, locationTimeZone)}</time>
             </label>
           </div>
-        </section>
-        <div
-          className="absolute left-4 top-[78px] z-30 flex w-[calc(100%-32px)] items-center gap-2 overflow-x-auto"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void handleSaveLocation()}
-            disabled={isSavingLocation || !coordsReady}
-            className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
-          >
-            {t("analysis.saveLocation")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void handleSaveGraph()}
-            disabled={!coordsReady || isCapturing}
-            className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
-          >
-            {t("analysis.saveGraph")}
-          </Button>
-          {isDesktop && (
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setExportOpen(true)}
-              disabled={!coordsReady || !diagramSpec || isCapturing}
-              className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
+              onClick={() => void handleSaveLocation()}
+              disabled={isSavingLocation || !coordsReady}
+              aria-label={t("analysis.saveLocation")}
+              title={t("analysis.saveLocation")}
+              className="h-12 w-12 rounded-full bg-white p-0 text-[#7a4a4a] shadow-sm transition-all duration-200 hover:bg-[#7a4a4a]/10 hover:text-[#7a4a4a] active:scale-95 disabled:opacity-50"
             >
-              {t("export.button")}
+              <BookmarkIcon className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            {isDesktop ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setExportOpen(true)}
+                disabled={!coordsReady || !diagramSpec || isCapturing}
+                aria-label={t("export.button")}
+                title={t("export.button")}
+                className="h-12 w-12 rounded-full bg-white p-0 text-[#7a4a4a] shadow-sm transition-all duration-200 hover:bg-[#7a4a4a]/10 hover:text-[#7a4a4a] active:scale-95 disabled:opacity-50"
+              >
+                <DownloadIcon className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void handleSaveGraph()}
+                disabled={!coordsReady || isCapturing}
+                aria-label={t("analysis.saveGraph")}
+                title={t("analysis.saveGraph")}
+                className="h-12 w-12 rounded-full bg-white p-0 text-[#7a4a4a] shadow-sm transition-all duration-200 hover:bg-[#7a4a4a]/10 hover:text-[#7a4a4a] active:scale-95 disabled:opacity-50"
+              >
+                <ImageDownIcon className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        </section>
+        <div
+          className="absolute left-4 top-[74px] z-30 flex w-[calc(100%-32px)] items-center gap-2 overflow-x-auto py-1"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
+        >
+          {coordsReady && center && (
+            <Button
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem("siteLat", center.lat.toString());
+                sessionStorage.setItem("siteLng", center.lng.toString());
+                navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}&location=${encodeURIComponent(locationLabel)}`);
+              }}
+              className="h-12 shrink-0 gap-2 rounded-full bg-[#7a4a4a] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[#6b3f3f] active:scale-[0.97]"
+            >
+              <Box className="h-4 w-4" aria-hidden="true" />
+              <span className="[font-family:'Adamina',Helvetica] text-sm leading-5">{t("analysis.threeDAnalysis")}</span>
             </Button>
           )}
           <Button
@@ -1003,33 +1029,11 @@ function AnalysisScreenContent(): JSX.Element {
             variant="outline"
             onClick={() => setModalOpen(true)}
             disabled={isLoading}
-            className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
+            className="h-12 shrink-0 gap-1.5 rounded-full border-[#7a4a4a]/30 bg-white px-4 text-[#7a4a4a] shadow-none transition-all duration-200 hover:border-[#7a4a4a]/60 hover:bg-[#7a4a4a]/5 hover:text-[#7a4a4a] active:scale-[0.97]"
           >
-            <PlusIcon className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
-            <span className="[font-family:'Adamina',Helvetica] text-[11px] leading-[22px] text-[#7a4a4a]">
-              {t("analysis.addSunPath")}
-            </span>
+            <PlusIcon className="h-4 w-4" aria-hidden="true" />
+            <span className="[font-family:'Adamina',Helvetica] text-sm leading-5">{t("analysis.addSunPath")}</span>
           </Button>
-          {coordsReady && center && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                sessionStorage.setItem("siteLat", center.lat.toString());
-                sessionStorage.setItem("siteLng", center.lng.toString());
-                navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}&location=${encodeURIComponent(locationLabel)}`);
-              }}
-              className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
-            >
-              <Box className="h-4 w-4 text-[#7a4a4a]" aria-hidden="true" />
-              <span className="[font-family:'Adamina',Helvetica] text-[11px] leading-[22px] text-[#7a4a4a]">
-                {t("analysis.threeDAnalysis")}
-              </span>
-              <span className="[font-family:'Adamina',Helvetica] text-[10px] leading-[22px] text-[#7a4a4a]/50">
-                (developing)
-              </span>
-            </Button>
-          )}
           {sunPaths.length > 0 && (
             <div
               ref={chipsRowRef}
@@ -1372,8 +1376,8 @@ function AnalysisScreenContent(): JSX.Element {
         aria-label="Primary navigation"
         className="fixed bottom-0 left-0 right-0 z-[1000] mx-auto flex h-[90px] w-full flex-col border-t-[0.5px] border-[#3c3c435c] bg-[#f9f9f9f0] pb-[env(safe-area-inset-bottom)] backdrop-blur-[10px]"
       >
-        <div className="grid h-[49px] w-full grid-cols-4 justify-items-center">
-          {navigationItems.map(({ labelKey, Icon }) => (
+        <div className={`grid h-[49px] w-full ${isDesktop ? "grid-cols-3" : "grid-cols-4"} justify-items-center`}>
+          {navigationItems.filter((item) => !isDesktop || item.labelKey !== "nav.graphs").map(({ labelKey, Icon }) => (
             <Button
               key={labelKey}
               type="button"
