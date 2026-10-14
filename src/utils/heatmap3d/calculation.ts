@@ -1,6 +1,6 @@
 import * as SunCalc from "suncalc";
 import { type NearbyBuilding, type SurfacePatch, type HeatmapResult, type TerrainSampler } from "./types";
-import { createLocalFrame, openRing, polygonRings, ringArea, type Pt } from "./geometry";
+import { allPolygonRings, createLocalFrame, openRing, pointInPolygon, ringArea, type Pt } from "./geometry";
 import { subdivideRoof, subdivideWalls } from "./subdivision";
 import { buildHeightGrid, isBlockedByBuildings, isBlockedByTerrain, type Obstacle, type TerrainProfile } from "./shadow";
 import { sunlightColor } from "./color";
@@ -40,12 +40,14 @@ export function calculate3DHeatmap(
   const ground = buildingGroundElevation ??
     (terrainSampler ? (terrainSampler(buildingCenterLng, buildingCenterLat) ?? 0) : 0);
 
-  const rings: Pt[][] = polygonRings(buildingGeometry)
-    .map((r) => openRing(r).map(([lng, lat]) => frame.toLocal(lng, lat)))
-    .filter((r) => r.length >= 3);
-  if (rings.length === 0) return { patches: [], avgHours: 0 };
+  const parts: Pt[][][] = allPolygonRings(buildingGeometry)
+    .map((poly) => poly
+      .map((r) => openRing(r).map(([lng, lat]) => frame.toLocal(lng, lat)))
+      .filter((r) => r.length >= 3))
+    .filter((poly) => poly.length > 0);
+  if (parts.length === 0) return { patches: [], avgHours: 0 };
 
-  const obstacles: Obstacle[] = [{ rings, top: ground + buildingHeight }];
+  const obstacles: Obstacle[] = parts.map((rings) => ({ rings, top: ground + buildingHeight }));
   for (const nb of nearbyBuildings) {
     const nbRings = nb.footprint
       .map((r) => openRing(r).map(([lng, lat]) => frame.toLocal(lng, lat)))
@@ -106,43 +108,50 @@ export function calculate3DHeatmap(
   const patches: SurfacePatch[] = [];
   let totalHours = 0;
 
-  const footprintArea = Math.abs(ringArea(rings[0]));
+  const footprintArea = parts.reduce((sum, rings) => sum + Math.abs(ringArea(rings[0])), 0);
   const roofCellSize = clamp(Math.sqrt(footprintArea / 700), 1.5, 5);
-  subdivideRoof(rings, roofCellSize).forEach((cell, i) => {
-    const hours = litHours(cell.sample[0], cell.sample[1], ground + buildingHeight + 0.2);
-    const offset = terrainOffset(cell.sample[0], cell.sample[1]);
-    totalHours += hours;
-    patches.push({
-      id: `roof-${i}`,
-      type: "roof",
-      geometry: { type: "Polygon", coordinates: cell.rings.map(toLngLatRing) },
-      baseHeight: buildingHeight + offset,
-      topHeight: buildingHeight + ROOF_LIFT_M + offset,
-      hours,
-      color: sunlightColor(hours),
-    });
-  });
-
   const wallSpan = Math.max(1, buildingHeight - buildingBaseHeight);
-  const perimeter = rings.reduce((sum, r) => sum + r.reduce((s, p, i) => {
+  const perimeter = parts.reduce((total, rings) => total + rings.reduce((sum, r) => sum + r.reduce((s, p, i) => {
     const q = r[(i + 1) % r.length];
     return s + Math.hypot(q[0] - p[0], q[1] - p[1]);
-  }, 0), 0);
+  }, 0), 0), 0);
   const segmentLength = clamp(perimeter / 160, 1.5, 6);
   const bandHeight = clamp(wallSpan / 24, 3, 12);
-  subdivideWalls(rings, buildingBaseHeight, buildingHeight, segmentLength, bandHeight).forEach((cell, i) => {
-    const z = ground + (cell.bottom + cell.top) / 2;
-    const hours = litHours(cell.sample[0], cell.sample[1], z, cell.normal);
-    const offset = terrainOffset(cell.sample[0], cell.sample[1]);
-    totalHours += hours;
-    patches.push({
-      id: `wall-${i}`,
-      type: "wall",
-      geometry: { type: "Polygon", coordinates: [toLngLatRing(cell.quad)] },
-      baseHeight: Math.max(0, cell.bottom + offset),
-      topHeight: cell.top + offset,
-      hours,
-      color: sunlightColor(hours),
+  const insideOtherPart = (pt: Pt, self: number) =>
+    parts.some((rings, j) => j !== self && pointInPolygon(pt[0], pt[1], rings));
+
+  parts.forEach((rings, partIndex) => {
+    subdivideRoof(rings, roofCellSize).forEach((cell, i) => {
+      const hours = litHours(cell.sample[0], cell.sample[1], ground + buildingHeight + 0.2);
+      const offset = terrainOffset(cell.sample[0], cell.sample[1]);
+      totalHours += hours;
+      patches.push({
+        id: `roof-${partIndex}-${i}`,
+        type: "roof",
+        geometry: { type: "Polygon", coordinates: cell.rings.map(toLngLatRing) },
+        baseHeight: buildingHeight + offset,
+        topHeight: buildingHeight + ROOF_LIFT_M + offset,
+        hours,
+        color: sunlightColor(hours),
+      });
+    });
+
+    subdivideWalls(rings, buildingBaseHeight, buildingHeight, segmentLength, bandHeight).forEach((cell, i) => {
+      // Seams where two pieces of the same building meet are interior, not real walls.
+      if (insideOtherPart(cell.sample, partIndex)) return;
+      const z = ground + (cell.bottom + cell.top) / 2;
+      const hours = litHours(cell.sample[0], cell.sample[1], z, cell.normal);
+      const offset = terrainOffset(cell.sample[0], cell.sample[1]);
+      totalHours += hours;
+      patches.push({
+        id: `wall-${partIndex}-${i}`,
+        type: "wall",
+        geometry: { type: "Polygon", coordinates: [toLngLatRing(cell.quad)] },
+        baseHeight: Math.max(0, cell.bottom + offset),
+        topHeight: cell.top + offset,
+        hours,
+        color: sunlightColor(hours),
+      });
     });
   });
 

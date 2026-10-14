@@ -10,6 +10,7 @@ import {
   calculate3DHeatmap,
   buildingCentroid,
   deduplicateFeatures,
+  collectBuildingParts,
   queryNearbyBuildings,
   renderHeatmapLayers,
   setHoverHighlight,
@@ -482,7 +483,14 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     setTimeout(() => setSelectionMessage(""), 2000);
     return;
   }
-            const bestFeature: SelectedBuilding = selection;
+            const partFeatures = map.queryRenderedFeatures(
+              [[e.point.x - 250, e.point.y - 250], [e.point.x + 250, e.point.y + 250]],
+              { layers: ["building-selection"] },
+            );
+            const bestFeature: SelectedBuilding = {
+              ...selection,
+              geometry: collectBuildingParts(selection, partFeatures),
+            };
             const id = bestFeature.feature.id ?? bestFeature.feature.properties?.id ?? bestFeature.feature.properties?.osm_id ?? Math.random();
             const centroid = buildingCentroid(bestFeature.geometry);
             if (!centroid) return;

@@ -23,7 +23,7 @@ export { sunlightColor } from "./color";
 
 export { calculate3DHeatmap } from "./calculation";
 
-export { deduplicateFeatures, type SelectedBuilding } from "./buildingSelection";
+export { deduplicateFeatures, collectBuildingParts, type SelectedBuilding } from "./buildingSelection";
 
 export { queryNearbyBuildings } from "./mapQueries";
 
