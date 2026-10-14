@@ -25,6 +25,8 @@ export { calculate3DHeatmap } from "./calculation";
 
 export { deduplicateFeatures, collectBuildingParts, type SelectedBuilding } from "./buildingSelection";
 
+export { partHeights, BUILDING_HEIGHT_EXPR, BUILDING_BASE_EXPR, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
+
 export { queryNearbyBuildings } from "./mapQueries";
 
 export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./mapLayers";

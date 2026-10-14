@@ -1,5 +1,6 @@
-import { AVG_BUILDING_HEIGHT_M, type NearbyBuilding, type FocusedBuilding, type TerrainSampler } from "./types";
+import { type NearbyBuilding, type FocusedBuilding, type TerrainSampler } from "./types";
 import { allPolygonRings, polygonCentroid } from "./geometry";
+import { partHeights } from "./buildingProps";
 
 const QUERY_RADIUS_PX = 350;
 
@@ -24,7 +25,7 @@ export function queryNearbyBuildings(
     );
 
     for (const f of features) {
-      const height = Number(f.properties?.render_height ?? f.properties?.height ?? AVG_BUILDING_HEIGHT_M) || AVG_BUILDING_HEIGHT_M;
+      const { height } = partHeights(f.properties);
       for (const rings of allPolygonRings(f.geometry)) {
         const c = polygonCentroid(rings);
         if (!c) continue;

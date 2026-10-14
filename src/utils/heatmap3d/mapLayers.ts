@@ -62,10 +62,10 @@ function addHighlightLayer(map: any, focusedBuilding: NonNullable<FocusedBuildin
       type: "fill-extrusion",
       minzoom: 14,
       paint: {
-        "fill-extrusion-color": "#a8a8a8",
+        "fill-extrusion-color": "#9aaab8",
         "fill-extrusion-height": focusedBuilding.height + 0.2,
         "fill-extrusion-base": focusedBuilding.baseHeight,
-        "fill-extrusion-opacity": 0.3,
+        "fill-extrusion-opacity": 1,
       },
     });
   } catch (e) {
@@ -103,7 +103,7 @@ function addHeatmapLayer(map: any, heatmapPatches: SurfacePatch[]): void {
         "fill-extrusion-color": ["get", "color"],
         "fill-extrusion-height": ["get", "topHeight"],
         "fill-extrusion-base": ["get", "baseHeight"],
-        "fill-extrusion-opacity": 0.92,
+        "fill-extrusion-opacity": 1,
       },
     });
   } catch (e) {

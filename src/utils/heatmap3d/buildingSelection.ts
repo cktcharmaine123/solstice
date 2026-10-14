@@ -1,4 +1,5 @@
 import { allPolygonRings, createLocalFrame, findHitPolygon, openRing, pointInRing, type Pt } from "./geometry";
+import { partHeights } from "./buildingProps";
 
 export type SelectedBuilding = {
   feature: any;
@@ -14,9 +15,7 @@ export function deduplicateFeatures(
   if (!features || features.length === 0) return null;
 
   const candidates = features.map((f) => {
-    const props = f.properties || {};
-    const height = Number(props.render_height ?? props.height ?? 0);
-    const minHeight = Number(props.render_min_height ?? props.min_height ?? 0);
+    const { height, base: minHeight } = partHeights(f.properties);
 
     let containsTap = false;
     let hitRings: number[][][] | null = null;
@@ -86,9 +85,7 @@ export function collectBuildingParts(selection: SelectedBuilding, features: any[
   const seedRings = allPolygonRings(selection.geometry)[0];
   if (!seedRings) return selection.geometry;
   const seedId = selection.feature.id;
-  const props = selection.feature.properties || {};
-  const seedHeight = Number(props.render_height ?? props.height ?? 0);
-  const seedBase = Number(props.render_min_height ?? props.min_height ?? 0);
+  const { height: seedHeight, base: seedBase } = partHeights(selection.feature.properties);
   const frame = createLocalFrame(seedRings[0][0][0], seedRings[0][0][1]);
   const toLocal = (ring: number[][]) => openRing(ring).map(([lng, lat]) => frame.toLocal(lng, lat));
 
@@ -100,10 +97,8 @@ export function collectBuildingParts(selection: SelectedBuilding, features: any[
 
   const candidates: Part[] = [];
   for (const f of features) {
-    const fp = f.properties || {};
     const sameId = seedId !== undefined && f.id === seedId;
-    const height = Number(fp.render_height ?? fp.height ?? 0);
-    const base = Number(fp.render_min_height ?? fp.min_height ?? 0);
+    const { height, base } = partHeights(f.properties);
     const similar = Math.abs(height - seedHeight) <= PART_HEIGHT_TOLERANCE_M &&
       Math.abs(base - seedBase) <= PART_HEIGHT_TOLERANCE_M;
     if (!sameId && !similar) continue;

@@ -11,6 +11,10 @@ import {
   buildingCentroid,
   deduplicateFeatures,
   collectBuildingParts,
+  partHeights,
+  BUILDING_HEIGHT_EXPR,
+  BUILDING_BASE_EXPR,
+  RENDERABLE_BUILDING_FILTER,
   queryNearbyBuildings,
   renderHeatmapLayers,
   setHoverHighlight,
@@ -356,6 +360,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                 'source-layer': 'building',
                 'type': 'fill',
                 'minzoom': 14,
+                'filter': RENDERABLE_BUILDING_FILTER as any,
                 'paint': {
                   'fill-color': '#000000',
                   'fill-opacity': 0,
@@ -374,11 +379,13 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                 'source-layer': 'building',
                 'type': 'fill-extrusion',
                 'minzoom': 14,
+                'filter': RENDERABLE_BUILDING_FILTER as any,
                 'paint': {
                   'fill-extrusion-color': '#d4d4d4',
-                  'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
-                  'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
-                  'fill-extrusion-opacity': 0.85
+                  'fill-extrusion-height': BUILDING_HEIGHT_EXPR as any,
+                  'fill-extrusion-base': BUILDING_BASE_EXPR as any,
+                  'fill-extrusion-opacity': 1,
+                  'fill-extrusion-vertical-gradient': true
                 }
               });
             } catch (e) {
@@ -495,14 +502,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             const centroid = buildingCentroid(bestFeature.geometry);
             if (!centroid) return;
             const [blng, blat] = centroid;
-            const height =
-              bestFeature.feature.properties?.render_height ??
-              bestFeature.feature.properties?.height ??
-              AVG_BUILDING_HEIGHT_M;
-            const baseHeight =
-              bestFeature.feature.properties?.render_min_height ??
-              bestFeature.feature.properties?.min_height ??
-              0;
+            const { height, base: baseHeight } = partHeights(bestFeature.feature.properties);
             const groundElevation = terrainSamplerRef.current
               ? (terrainSamplerRef.current(blng, blat) ?? 0)
               : 0;
@@ -511,8 +511,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               id,
               lat: blat,
               lng: blng,
-              height: Number(height) || AVG_BUILDING_HEIGHT_M,
-              baseHeight: Number(baseHeight) || 0,
+              height,
+              baseHeight,
               groundElevation,
               geometry: bestFeature.geometry,
             });
