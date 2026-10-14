@@ -13,7 +13,7 @@ import {
   collectBuildingParts,
   partHeights,
   BUILDING_HEIGHT_EXPR,
-  BUILDING_BASE_EXPR,
+  DISPLAY_BASE_EXPR,
   RENDERABLE_BUILDING_FILTER,
   queryNearbyBuildings,
   renderHeatmapLayers,
@@ -383,7 +383,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                 'paint': {
                   'fill-extrusion-color': '#d4d4d4',
                   'fill-extrusion-height': BUILDING_HEIGHT_EXPR as any,
-                  'fill-extrusion-base': BUILDING_BASE_EXPR as any,
+                  'fill-extrusion-base': DISPLAY_BASE_EXPR as any,
                   'fill-extrusion-opacity': 1,
                   'fill-extrusion-vertical-gradient': true
                 }
