@@ -27,7 +27,7 @@ async function loadTerrain(origin: Scene3DInput["origin"]): Promise<boolean> {
  */
 export async function exportScene3D(input: Scene3DInput, format: ExportFormat, skipMissing: boolean): Promise<Blob> {
   const [tiles, terrainOk] = await Promise.all([
-    fetchMapTiles({ center: input.origin, halfExtentM: SCENE_HALF_EXTENT_M }).catch((err): MapTile[] | null => {
+    fetchMapTiles({ center: input.origin, halfExtentM: SCENE_HALF_EXTENT_M + TERRAIN_MARGIN_M }).catch((err): MapTile[] | null => {
       console.warn("Map data for 3D export failed:", err);
       return null;
     }),

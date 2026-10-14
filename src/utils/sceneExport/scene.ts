@@ -213,6 +213,8 @@ export function buildScene3D(input: Scene3DInput, tiles: MapTile[], sampler: Ter
   const { origin, focused } = input;
   const frame = createLocalFrame(origin.lng, origin.lat);
   const fallbackElevation = sampler?.(origin.lng, origin.lat) ?? 0;
+  const outlines = outlinesFromTiles(tiles, { center: origin, halfExtentM: h });
+  const wideWater = outlinesFromTiles(tiles, { center: origin, halfExtentM: h + TERRAIN_MARGIN_M }).water;
   const grid = sampleTerrainGrid(
     h,
     (x, y) => {
@@ -221,10 +223,10 @@ export function buildScene3D(input: Scene3DInput, tiles: MapTile[], sampler: Ter
       return sampler(lng, lat) ?? fallbackElevation;
     },
     !!sampler,
+    wideWater,
   );
   const originElevation = gridHeight(grid, 0, 0);
 
-  const outlines = outlinesFromTiles(tiles, { center: origin, halfExtentM: h });
   const drapePolys = (polys: Pt[][][]) => polys.map((rings) => rings.map((ring) => drapeLine(ring, grid, true)));
 
   const hasHeatmap = !!focused && input.patches.length > 0;

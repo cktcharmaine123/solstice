@@ -1,3 +1,4 @@
+import { pointInPolygon } from "../heatmap3d";
 import type { ContourLevel, Pt, Pt3, TerrainGrid } from "./types";
 
 export type GroundFn = (x: number, y: number) => number;
@@ -7,6 +8,10 @@ const DRAPE_STEP_M = 4;
 const DRAPE_LIFT_M = 0.15;
 /** Bumps narrower than about twice this are flattened; city elevation data counts tall buildings as ground. */
 const BUMP_RADIUS_M = 60;
+/** Pits narrower than about twice this are filled; elevation data has stray deep readings, mostly over water. */
+const PIT_RADIUS_M = 20;
+const SHORE_PERCENTILE = 0.2;
+const FINAL_SHORE_PERCENTILE = 0.05;
 
 function windowFilter(src: Float32Array, size: number, radius: number, pick: (a: number, b: number) => number): Float32Array {
   const pass = (input: Float32Array, horizontal: boolean) => {
@@ -46,23 +51,97 @@ function smooth(src: Float32Array, size: number): Float32Array {
   return out;
 }
 
+const NEIGHBOURS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** Connected groups of grid cells that lie inside a water area. */
+function waterRegions(water: Pt[][][], size: number, origin: number, step: number): number[][] {
+  const isWater = new Uint8Array(size * size);
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const x = origin + c * step;
+      const y = origin + r * step;
+      if (water.some((rings) => pointInPolygon(x, y, rings))) isWater[r * size + c] = 1;
+    }
+  }
+  const regions: number[][] = [];
+  const seen = new Uint8Array(size * size);
+  for (let start = 0; start < size * size; start++) {
+    if (!isWater[start] || seen[start]) continue;
+    const cells = [start];
+    seen[start] = 1;
+    for (let i = 0; i < cells.length; i++) {
+      const r = Math.floor(cells[i] / size);
+      const c = cells[i] % size;
+      for (const [dc, dr] of NEIGHBOURS) {
+        const rr = r + dr;
+        const cc = c + dc;
+        const k = rr * size + cc;
+        if (rr < 0 || cc < 0 || rr >= size || cc >= size || !isWater[k] || seen[k]) continue;
+        seen[k] = 1;
+        cells.push(k);
+      }
+    }
+    regions.push(cells);
+  }
+  return regions;
+}
+
+/** Land cells bordering a water region. */
+function shoreCells(cells: number[], size: number): number[] {
+  const inRegion = new Set(cells);
+  const shore = new Set<number>();
+  for (const k of cells) {
+    const r = Math.floor(k / size);
+    const c = k % size;
+    for (const [dc, dr] of NEIGHBOURS) {
+      const rr = r + dr;
+      const cc = c + dc;
+      const n = rr * size + cc;
+      if (rr >= 0 && cc >= 0 && rr < size && cc < size && !inRegion.has(n)) shore.add(n);
+    }
+  }
+  return [...shore];
+}
+
+function percentile(values: number[], p: number): number {
+  const sorted = values.slice().sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+}
+
 /**
- * Samples ground heights every few metres. With `removeBumps`, building-sized bumps are taken out
- * (a morphological opening, which leaves even slopes untouched) before light smoothing.
+ * Samples ground heights every few metres. With `cleanUp`, stray deep pits are filled, building-sized
+ * bumps are taken out (morphological closing then opening, which leave even slopes untouched), the
+ * result is lightly smoothed, and each water area is made flat at the lowest height of its shore.
  */
-export function sampleTerrainGrid(halfExtent: number, ground: GroundFn, removeBumps: boolean): TerrainGrid {
+export function sampleTerrainGrid(halfExtent: number, ground: GroundFn, cleanUp: boolean, water: Pt[][][] = []): TerrainGrid {
   const cols = Math.ceil((2 * halfExtent) / GRID_STEP_M);
   const step = (2 * halfExtent) / cols;
-  const margin = removeBumps ? Math.ceil(BUMP_RADIUS_M / step) * 2 : 0;
+  const margin = cleanUp ? Math.ceil(BUMP_RADIUS_M / step) * 2 : 0;
   const size = cols + 1 + 2 * margin;
   const origin = -halfExtent - margin * step;
-  let wide = new Float32Array(size * size);
+  let wide: Float32Array = new Float32Array(size * size);
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) wide[r * size + c] = ground(origin + c * step, origin + r * step);
   }
-  if (removeBumps) {
-    const radius = Math.ceil(BUMP_RADIUS_M / step);
-    wide = smooth(windowFilter(windowFilter(wide, size, radius, Math.min), size, radius, Math.max), size);
+  if (cleanUp) {
+    const regions = waterRegions(water, size, origin, step);
+    for (const cells of regions) {
+      const shore = shoreCells(cells, size);
+      if (shore.length === 0) continue;
+      const level = percentile(shore.map((k) => wide[k]), SHORE_PERCENTILE);
+      for (const k of cells) wide[k] = level;
+    }
+    const pit = Math.ceil(PIT_RADIUS_M / step);
+    const bump = Math.ceil(BUMP_RADIUS_M / step);
+    wide = windowFilter(windowFilter(wide, size, pit, Math.max), size, pit, Math.min);
+    wide = smooth(windowFilter(windowFilter(wide, size, bump, Math.min), size, bump, Math.max), size);
+    for (const cells of regions) {
+      const shore = shoreCells(cells, size);
+      const level = shore.length > 0
+        ? percentile(shore.map((k) => wide[k]), FINAL_SHORE_PERCENTILE)
+        : percentile(cells.map((k) => wide[k]), 0.5);
+      for (const k of cells) wide[k] = level;
+    }
   }
   const heights = new Float32Array((cols + 1) * (cols + 1));
   for (let r = 0; r <= cols; r++) {
