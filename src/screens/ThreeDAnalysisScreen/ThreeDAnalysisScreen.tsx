@@ -964,10 +964,11 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               type="button"
               variant="ghost"
               onClick={() => setExportOpen(true)}
-              className="flex h-12 items-center gap-1.5 rounded-full bg-white/90 px-4 text-[#7a4a4a] shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
+              aria-label={t("export.button")}
+              title={t("export.button")}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 p-0 text-[#7a4a4a] shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
             >
               <DownloadIcon className="h-5 w-5" aria-hidden="true" />
-              <span className="font-['Inter'] text-sm font-medium">{t("export.button")}</span>
             </Button>
           )}
           {mapReady && (
