@@ -81,47 +81,71 @@ function longestSegmentLabel(text: string, lines: Pt[][]): StreetLabel | null {
   return best;
 }
 
+export type MapTile = { x: number; y: number; tile: VectorTile };
+
+let lastTiles: { key: string; promise: Promise<MapTile[]> } | null = null;
+
+/** Downloads the map tiles covering the square; the last set is reused so repeated exports don't refetch. */
+export function fetchMapTiles(spec: Pick<DiagramSpec, "center" | "halfExtentM">): Promise<MapTile[]> {
+  const { x0, x1, y0, y1 } = tileRange(diagramFrame(spec), spec.halfExtentM);
+  const key = `${x0}:${x1}:${y0}:${y1}`;
+  if (lastTiles?.key === key) return lastTiles.promise;
+
+  const promise = (async () => {
+    const template = await tileUrlTemplate();
+    const requests: Promise<MapTile>[] = [];
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        const url = template.replace("{z}", String(TILE_ZOOM)).replace("{x}", String(x)).replace("{y}", String(y));
+        requests.push(
+          fetch(url).then(async (res) => {
+            if (!res.ok) throw new Error(`Map tile unavailable (${res.status})`);
+            return { x, y, tile: new VectorTile(new Pbf(new Uint8Array(await res.arrayBuffer()))) };
+          }),
+        );
+      }
+    }
+    return Promise.all(requests);
+  })();
+  lastTiles = { key, promise };
+  promise.catch(() => {
+    if (lastTiles?.promise === promise) lastTiles = null;
+  });
+  return promise;
+}
+
+function eachFeature(
+  { x, y, tile }: MapTile,
+  layer: string,
+  fn: (props: any, geometry: any, id: number | undefined) => void,
+): void {
+  const l = tile.layers[layer];
+  if (!l) return;
+  for (let i = 0; i < l.length; i++) {
+    const f = l.feature(i);
+    fn(f.properties, f.toGeoJSON(x, y, TILE_ZOOM).geometry, f.id);
+  }
+}
+
 export async function fetchMapOutlines(spec: Pick<DiagramSpec, "center" | "halfExtentM">): Promise<MapOutlines> {
+  return outlinesFromTiles(await fetchMapTiles(spec), spec);
+}
+
+export function outlinesFromTiles(tiles: MapTile[], spec: Pick<DiagramSpec, "center" | "halfExtentM">): MapOutlines {
   const frame = diagramFrame(spec);
   const h = spec.halfExtentM;
-  const template = await tileUrlTemplate();
-  const { x0, x1, y0, y1 } = tileRange(frame, h);
-
-  const requests: Promise<{ x: number; y: number; tile: VectorTile }>[] = [];
-  for (let x = x0; x <= x1; x++) {
-    for (let y = y0; y <= y1; y++) {
-      const url = template.replace("{z}", String(TILE_ZOOM)).replace("{x}", String(x)).replace("{y}", String(y));
-      requests.push(
-        fetch(url).then(async (res) => {
-          if (!res.ok) throw new Error(`Map tile unavailable (${res.status})`);
-          return { x, y, tile: new VectorTile(new Pbf(new Uint8Array(await res.arrayBuffer()))) };
-        }),
-      );
-    }
-  }
-  const tiles = await Promise.all(requests);
-
   const out: MapOutlines = { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [], labels: [] };
   const namedLines = new Map<string, Pt[][]>();
 
-  const eachFeature = (tile: VectorTile, x: number, y: number, layer: string, fn: (props: any, geometry: any) => void) => {
-    const l = tile.layers[layer];
-    if (!l) return;
-    for (let i = 0; i < l.length; i++) {
-      const f = l.feature(i);
-      fn(f.properties, f.toGeoJSON(x, y, TILE_ZOOM).geometry);
-    }
-  };
-
-  for (const { x, y, tile } of tiles) {
-    eachFeature(tile, x, y, "park", (_p, g) => out.parks.push(...polygonsOf(g, frame, h)));
-    eachFeature(tile, x, y, "landcover", (p, g) => {
+  for (const tile of tiles) {
+    eachFeature(tile, "park", (_p, g) => out.parks.push(...polygonsOf(g, frame, h)));
+    eachFeature(tile, "landcover", (p, g) => {
       if (GREEN_LANDCOVER.has(p.class)) out.parks.push(...polygonsOf(g, frame, h));
     });
-    eachFeature(tile, x, y, "water", (_p, g) => out.water.push(...polygonsOf(g, frame, h)));
-    eachFeature(tile, x, y, "waterway", (_p, g) => out.waterways.push(...linesOf(g, frame, h)));
-    eachFeature(tile, x, y, "building", (_p, g) => out.buildings.push(...polygonsOf(g, frame, h)));
-    eachFeature(tile, x, y, "transportation", (p, g) => {
+    eachFeature(tile, "water", (_p, g) => out.water.push(...polygonsOf(g, frame, h)));
+    eachFeature(tile, "waterway", (_p, g) => out.waterways.push(...linesOf(g, frame, h)));
+    eachFeature(tile, "building", (_p, g) => out.buildings.push(...polygonsOf(g, frame, h)));
+    eachFeature(tile, "transportation", (p, g) => {
       if (p.brunnel === "tunnel") return;
       const lines = linesOf(g, frame, h);
       if (RAIL_CLASSES.has(p.class)) {
@@ -132,7 +156,7 @@ export async function fetchMapOutlines(spec: Pick<DiagramSpec, "center" | "halfE
       if (!style) return;
       for (const line of lines) out.roads.push({ ...style, line });
     });
-    eachFeature(tile, x, y, "transportation_name", (p, g) => {
+    eachFeature(tile, "transportation_name", (p, g) => {
       const name = typeof p.name === "string" ? p.name.trim() : "";
       if (!name) return;
       const lines = linesOf(g, frame, h);
@@ -146,6 +170,23 @@ export async function fetchMapOutlines(spec: Pick<DiagramSpec, "center" | "halfE
   }
 
   return out;
+}
+
+export type TileBuildings = {
+  /** Exact tile edges as [west, south, east, north]; features run slightly past them into the tile buffer. */
+  bounds: [number, number, number, number];
+  features: { id: number | undefined; type: "Feature"; geometry: any; properties: any }[];
+};
+
+export function buildingsFromTiles(tiles: MapTile[]): TileBuildings[] {
+  const n = 2 ** TILE_ZOOM;
+  const lngAt = (x: number) => (x / n) * 360 - 180;
+  const latAt = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+  return tiles.map((tile) => {
+    const features: TileBuildings["features"] = [];
+    eachFeature(tile, "building", (properties, geometry, id) => features.push({ id, type: "Feature", geometry, properties }));
+    return { bounds: [lngAt(tile.x), latAt(tile.y + 1), lngAt(tile.x + 1), latAt(tile.y)], features };
+  });
 }
 
 export function emptyMapOutlines(): MapOutlines {

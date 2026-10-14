@@ -113,6 +113,16 @@ export type TranslationKey =
   | "threed.transitioning"
   | "threed.terrainActive"
   | "threed.terrainLoading"
+  | "threed.resetView"
+  | "export3d.title"
+  | "export3d.svgDesc"
+  | "export3d.dxfDesc"
+  | "export3d.noHeatmap"
+  | "export3d.waitForAnalysis"
+  | "export3d.mapFailed"
+  | "export3d.withoutMap"
+  | "export3d.terrainFailed"
+  | "export3d.flatGround"
   | "settings.title"
   | "settings.language"
   | "settings.privacyPolicy"
@@ -237,6 +247,16 @@ const en: Dictionary = {
   "threed.transitioning": "Switching to 2D map...",
   "threed.terrainActive": "Terrain",
   "threed.terrainLoading": "Loading terrain...",
+  "threed.resetView": "Reset view",
+  "export3d.title": "Export 3D view",
+  "export3d.svgDesc": "Isometric drawing from the south-west, with editable layers",
+  "export3d.dxfDesc": "3D model in metres with terrain, for SketchUp, Rhino or AutoCAD",
+  "export3d.noHeatmap": "No building is selected, so the export won't include the sunlight heatmap.",
+  "export3d.waitForAnalysis": "Please wait for the sunlight analysis to finish.",
+  "export3d.mapFailed": "The surrounding buildings and streets couldn't be loaded. You can still export the selected building and its heatmap.",
+  "export3d.withoutMap": "Export building only",
+  "export3d.terrainFailed": "The ground heights couldn't be loaded. You can export with flat ground instead.",
+  "export3d.flatGround": "Use flat ground",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -363,6 +383,16 @@ const zhTW: Dictionary = {
   "threed.transitioning": "切換至2D地圖...",
   "threed.terrainActive": "地形",
   "threed.terrainLoading": "載入地形中...",
+  "threed.resetView": "重設視角",
+  "export3d.title": "匯出3D視圖",
+  "export3d.svgDesc": "從西南方的等角圖，圖層可編輯",
+  "export3d.dxfDesc": "以公尺為單位並包含地形的3D模型，適用於 SketchUp、Rhino 或 AutoCAD",
+  "export3d.noHeatmap": "尚未選擇建築物，匯出檔案將不包含日照熱圖。",
+  "export3d.waitForAnalysis": "請等待日照分析完成。",
+  "export3d.mapFailed": "無法載入周邊建築物及街道。您仍可匯出所選建築物及其熱圖。",
+  "export3d.withoutMap": "只匯出建築物",
+  "export3d.terrainFailed": "無法載入地面高度。您可以改用平坦地面匯出。",
+  "export3d.flatGround": "使用平坦地面",
 
   "settings.title": "設定",
   "settings.language": "語言",

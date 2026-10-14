@@ -1,11 +1,11 @@
+import type { TranslationKey } from "../../i18n/translations";
 import { buildDiagramDxf } from "./dxf";
 import { computeHalfExtent } from "./geometry";
 import { emptyMapOutlines, fetchMapOutlines } from "./mapData";
 import { buildDiagramSvg } from "./svg";
-import type { DiagramPath, DiagramSpec, ExportFormat, MapOutlines } from "./types";
+import type { DiagramPath, DiagramSpec, ExportFormat } from "./types";
 
-export type { DiagramPath, DiagramSpec, ExportFormat, MapOutlines };
-export { fetchMapOutlines, emptyMapOutlines };
+export type { DiagramPath, DiagramSpec, ExportFormat };
 
 export function createDiagramSpec(title: string, center: { lat: number; lng: number }, paths: DiagramPath[]): DiagramSpec {
   return {
@@ -29,10 +29,31 @@ export function isDiagramSpec(value: unknown): value is DiagramSpec {
   );
 }
 
-export function renderDiagram(spec: DiagramSpec, map: MapOutlines, format: ExportFormat): Blob {
-  return format === "svg"
-    ? new Blob([buildDiagramSvg(spec, map)], { type: "image/svg+xml;charset=utf-8" })
-    : new Blob([buildDiagramDxf(spec, map)], { type: "application/dxf" });
+/** Optional map data that could not be loaded; the export can be retried without it. */
+export class ExportDataError extends Error {
+  constructor(
+    readonly messageKey: TranslationKey,
+    readonly retryKey: TranslationKey,
+  ) {
+    super(messageKey);
+  }
+}
+
+export function fileBlob(content: string, format: ExportFormat): Blob {
+  return new Blob([content], { type: format === "svg" ? "image/svg+xml;charset=utf-8" : "application/dxf" });
+}
+
+export async function exportDiagram(spec: DiagramSpec, format: ExportFormat, skipMissing: boolean): Promise<Blob> {
+  let map = emptyMapOutlines();
+  if (!skipMissing) {
+    try {
+      map = await fetchMapOutlines(spec);
+    } catch (err) {
+      console.warn("Street map for export failed:", err);
+      throw new ExportDataError("export.mapFailed", "export.withoutMap");
+    }
+  }
+  return fileBlob(format === "svg" ? buildDiagramSvg(spec, map) : buildDiagramDxf(spec, map), format);
 }
 
 export function downloadBlob(blob: Blob, fileName: string): void {

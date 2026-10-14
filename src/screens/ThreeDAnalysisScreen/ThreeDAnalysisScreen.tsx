@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon, MountainIcon } from "lucide-react";
+import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon, MountainIcon, RotateCcwIcon, DownloadIcon } from "lucide-react";
 import * as SunCalc from "suncalc";
 import lookupTimezone from "tz-lookup";
 import { Button } from "../../components/ui/button";
+import { VectorExportDialog, type ExportFile } from "../../components/VectorExportDialog";
+import { useIsDesktop } from "../../lib/useIsDesktop";
+import { exportScene3D } from "../../utils/sceneExport";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 import {
@@ -58,7 +61,10 @@ declare global {
 
 const DEFAULT_CENTER: [number, number] = [114.16, 22.28];
 const DEFAULT_ZOOM = 17.5;
-const DEFAULT_PITCH = 60;
+const FOCUSED_ZOOM = 17;
+// True isometric angle from the south-west, matching the 3D export.
+const DEFAULT_PITCH = 54.7;
+const DEFAULT_BEARING = 45;
 const MIN_ZOOM = 16.5;
 const MAX_ZOOM = 19.5;
 const MAX_PITCH = 65;
@@ -112,6 +118,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const [heatmapPatches, setHeatmapPatches] = useState<SurfacePatch[]>([]);
   const [terrainEnabled, setTerrainEnabled] = useState(false);
   const [terrainLoading, setTerrainLoading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   const rawLat = searchParams.get("lat") ?? sessionStorage.getItem("siteLat");
   const rawLng = searchParams.get("lng") ?? sessionStorage.getItem("siteLng");
@@ -122,6 +130,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const hasCoords =
     !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
   const center: [number, number] = hasCoords ? [lng, lat] : DEFAULT_CENTER;
+  const siteTitle = searchParams.get("location")?.trim() || `${center[1].toFixed(4)}, ${center[0].toFixed(4)}`;
 
   const useTerrain = hasCoords ? isInHongKong(lng, lat) : isInHongKong(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
 
@@ -210,7 +219,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         ? [focusedBuilding.lng, focusedBuilding.lat]
         : (savedCameraRef.current?.center ?? center);
       const targetZoom = focusedBuilding
-        ? 17
+        ? FOCUSED_ZOOM
         : (savedCameraRef.current?.zoom ?? DEFAULT_ZOOM);
       map.once("moveend", () => {
         if (selectionModeRef.current === "to3d") setSelectionMode("idle");
@@ -219,7 +228,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         pitch: DEFAULT_PITCH,
         zoom: targetZoom,
         center: targetCenter,
-        bearing: savedCameraRef.current?.bearing ?? 0,
+        bearing: focusedBuilding ? DEFAULT_BEARING : (savedCameraRef.current?.bearing ?? DEFAULT_BEARING),
         duration: 800,
         essential: true,
       });
@@ -270,7 +279,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           maxZoom: MAX_ZOOM,
           pitch: DEFAULT_PITCH,
           maxPitch: MAX_PITCH,
-          bearing: 0,
+          bearing: DEFAULT_BEARING,
           attributionControl: false,
           antialias: true,
           dragPan: false,
@@ -872,6 +881,32 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     setHeatmapPatches([]);
   };
 
+  const resetView = (): void => {
+    mapRef.current?.easeTo({
+      center: focusedBuilding ? [focusedBuilding.lng, focusedBuilding.lat] : center,
+      zoom: focusedBuilding ? FOCUSED_ZOOM : DEFAULT_ZOOM,
+      pitch: DEFAULT_PITCH,
+      bearing: DEFAULT_BEARING,
+      duration: 800,
+      essential: true,
+    });
+  };
+
+  const exportFile: ExportFile | null = analyzing
+    ? null
+    : (format, skipMissing) =>
+        exportScene3D(
+          {
+            title: siteTitle,
+            dateLabel: formatShortDate(selectedDate),
+            origin: focusedBuilding ? { lat: focusedBuilding.lat, lng: focusedBuilding.lng } : { lat: center[1], lng: center[0] },
+            focused: focusedBuilding,
+            patches: heatmapPatches,
+          },
+          format,
+          skipMissing,
+        );
+
   return (
     <main className="relative h-[100dvh] w-full overflow-hidden bg-white">
       <div ref={containerRef} className={`absolute inset-0 h-full w-full ${selectionMode === "selecting" ? "cursor-crosshair" : ""}`} />
@@ -940,6 +975,29 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                 {t("threed.terrainLoading")}
               </span>
             </div>
+          )}
+          {mapReady && selectionMode === "idle" && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={resetView}
+              aria-label={t("threed.resetView")}
+              title={t("threed.resetView")}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 p-0 text-[#7a4a4a] shadow-sm backdrop-blur-sm transition-colors hover:bg-white md:h-12 md:w-12"
+            >
+              <RotateCcwIcon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
+            </Button>
+          )}
+          {mapReady && isDesktop && selectionMode === "idle" && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setExportOpen(true)}
+              className="flex h-12 items-center gap-1.5 rounded-full bg-white/90 px-4 text-[#7a4a4a] shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
+            >
+              <DownloadIcon className="h-5 w-5" aria-hidden="true" />
+              <span className="font-['Inter'] text-sm font-medium">{t("export.button")}</span>
+            </Button>
           )}
           {mapReady && (
             <Button
@@ -1127,6 +1185,19 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             </span>
           </div>
         </section>
+      )}
+      {isDesktop && (
+        <VectorExportDialog
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          exportFile={exportFile}
+          fileBaseName={`${siteTitle} 3D ${formatShortDate(selectedDate)}`}
+          title={t("export3d.title")}
+          svgDescription={t("export3d.svgDesc")}
+          dxfDescription={t("export3d.dxfDesc")}
+          unavailableMessage={t("export3d.waitForAnalysis")}
+          notice={focusedBuilding ? undefined : t("export3d.noHeatmap")}
+        />
       )}
     </main>
   );

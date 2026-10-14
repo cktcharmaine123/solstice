@@ -1,32 +1,46 @@
 import { FileImage, Loader2, PenTool, Ruler, XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { useLanguage } from "../i18n/LanguageContext";
-import {
-  downloadBlob,
-  emptyMapOutlines,
-  fetchMapOutlines,
-  renderDiagram,
-  safeFileName,
-  type DiagramSpec,
-  type ExportFormat,
-  type MapOutlines,
-} from "../utils/vectorExport";
+import type { TranslationKey } from "../i18n/translations";
+import { downloadBlob, ExportDataError, safeFileName, type ExportFormat } from "../utils/vectorExport";
+
+export type ExportFile = (format: ExportFormat, skipMissing: boolean) => Promise<Blob>;
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  diagram: DiagramSpec | null;
+  /** Null when there is nothing to export yet; `unavailableMessage` explains why. */
+  exportFile: ExportFile | null;
   fileBaseName: string;
   onDownloadPng?: () => void;
+  title?: string;
+  svgDescription?: string;
+  dxfDescription?: string;
+  unavailableMessage?: string;
+  notice?: string;
 };
 
-type Status = { kind: "idle" } | { kind: "busy"; format: ExportFormat } | { kind: "mapFailed"; format: ExportFormat } | { kind: "failed" };
+type Status =
+  | { kind: "idle" }
+  | { kind: "busy"; format: ExportFormat }
+  | { kind: "missing"; format: ExportFormat; messageKey: TranslationKey; retryKey: TranslationKey }
+  | { kind: "failed" };
 
-export function VectorExportDialog({ open, onClose, diagram, fileBaseName, onDownloadPng }: Props): JSX.Element | null {
+export function VectorExportDialog({
+  open,
+  onClose,
+  exportFile,
+  fileBaseName,
+  onDownloadPng,
+  title,
+  svgDescription,
+  dxfDescription,
+  unavailableMessage,
+  notice,
+}: Props): JSX.Element | null {
   const { t } = useLanguage();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const mapCache = useRef<{ key: string; map: MapOutlines } | null>(null);
 
   useEffect(() => {
     if (open) setStatus({ kind: "idle" });
@@ -45,25 +59,17 @@ export function VectorExportDialog({ open, onClose, diagram, fileBaseName, onDow
 
   const busy = status.kind === "busy";
 
-  const runExport = async (format: ExportFormat, includeMap: boolean): Promise<void> => {
-    if (!diagram || busy) return;
+  const runExport = async (format: ExportFormat, skipMissing: boolean): Promise<void> => {
+    if (!exportFile || busy) return;
     setStatus({ kind: "busy", format });
-    let map = emptyMapOutlines();
-    if (includeMap) {
-      const key = `${diagram.center.lat},${diagram.center.lng},${diagram.halfExtentM}`;
-      try {
-        if (mapCache.current?.key !== key) mapCache.current = { key, map: await fetchMapOutlines(diagram) };
-        map = mapCache.current.map;
-      } catch (err) {
-        console.warn("Street map for export failed:", err);
-        setStatus({ kind: "mapFailed", format });
-        return;
-      }
-    }
     try {
-      downloadBlob(renderDiagram(diagram, map, format), `${safeFileName(fileBaseName)}.${format}`);
+      downloadBlob(await exportFile(format, skipMissing), `${safeFileName(fileBaseName)}.${format}`);
       setStatus({ kind: "idle" });
     } catch (err) {
+      if (err instanceof ExportDataError) {
+        setStatus({ kind: "missing", format, messageKey: err.messageKey, retryKey: err.retryKey });
+        return;
+      }
       console.warn("Export failed:", err);
       setStatus({ kind: "failed" });
     }
@@ -80,7 +86,7 @@ export function VectorExportDialog({ open, onClose, diagram, fileBaseName, onDow
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="vector-export-title" className="font-['Inter'] text-lg font-semibold leading-tight text-[#7a4a4a]">
-            {t("export.title")}
+            {title ?? t("export.title")}
           </h2>
           <Button
             type="button"
@@ -109,34 +115,35 @@ export function VectorExportDialog({ open, onClose, diagram, fileBaseName, onDow
           <ExportOption
             icon={<PenTool className="h-5 w-5" aria-hidden="true" />}
             title={t("export.svg")}
-            description={t("export.svgDesc")}
-            disabled={!diagram || busy}
+            description={svgDescription ?? t("export.svgDesc")}
+            disabled={!exportFile || busy}
             loading={status.kind === "busy" && status.format === "svg"}
-            onClick={() => void runExport("svg", true)}
+            onClick={() => void runExport("svg", false)}
           />
           <ExportOption
             icon={<Ruler className="h-5 w-5" aria-hidden="true" />}
             title={t("export.dxf")}
-            description={t("export.dxfDesc")}
-            disabled={!diagram || busy}
+            description={dxfDescription ?? t("export.dxfDesc")}
+            disabled={!exportFile || busy}
             loading={status.kind === "busy" && status.format === "dxf"}
-            onClick={() => void runExport("dxf", true)}
+            onClick={() => void runExport("dxf", false)}
           />
         </div>
 
         <div className="mt-4 min-h-[20px] font-['Inter'] text-xs leading-[1.5]" aria-live="polite">
-          {!diagram && <p className="text-[#828282]">{t("export.unavailable")}</p>}
+          {!exportFile && <p className="text-[#828282]">{unavailableMessage ?? t("export.unavailable")}</p>}
+          {exportFile && notice && status.kind === "idle" && <p className="text-[#828282]">{notice}</p>}
           {busy && <p className="text-[#828282]">{t("export.preparing")}</p>}
           {status.kind === "failed" && <p className="text-red-600">{t("export.failed")}</p>}
-          {status.kind === "mapFailed" && (
+          {status.kind === "missing" && (
             <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
-              <p>{t("export.mapFailed")}</p>
+              <p>{t(status.messageKey)}</p>
               <button
                 type="button"
-                onClick={() => void runExport(status.format, false)}
+                onClick={() => void runExport(status.format, true)}
                 className="shrink-0 rounded-md bg-white px-2.5 py-1.5 font-medium text-[#7a4a4a] shadow-sm transition-colors hover:bg-neutral-50"
               >
-                {t("export.withoutMap")}
+                {t(status.retryKey)}
               </button>
             </div>
           )}

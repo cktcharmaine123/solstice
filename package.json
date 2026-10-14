@@ -17,6 +17,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "2.1.1",
     "dom-to-image-more": "^3.10.2",
+    "earcut": "^3.2.4",
     "html-to-image": "^1.11.11",
     "leaflet": "^1.9.4",
     "leaflet-rotate": "^0.2.8",

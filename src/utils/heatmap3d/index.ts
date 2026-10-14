@@ -9,6 +9,12 @@ export {
 } from "./types";
 
 export {
+  createLocalFrame,
+  openRing,
+  ringArea,
+  ringCentroid,
+  type LocalFrame,
+  type Pt,
   polygonRings,
   allPolygonRings,
   buildingCentroid,
@@ -19,15 +25,15 @@ export {
   polygonCentroid,
 } from "./geometry";
 
-export { sunlightColor } from "./color";
+export { sunlightColor, sunlightBandIndex, SUNLIGHT_BANDS, type SunlightBand } from "./color";
 
 export { calculate3DHeatmap } from "./calculation";
 
 export { deduplicateFeatures, collectBuildingParts, type SelectedBuilding } from "./buildingSelection";
 
-export { partHeights, BUILDING_HEIGHT_EXPR, DISPLAY_BASE_EXPR, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
+export { partHeights, displayBase, isRenderablePart, BUILDING_HEIGHT_EXPR, DISPLAY_BASE_EXPR, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
 
-export { FILLER_LAYER, addBuildingFillerLayer, watchBuildingFillers } from "./fillers";
+export { FILLER_LAYER, addBuildingFillerLayer, computeBuildingFillers, watchBuildingFillers } from "./fillers";
 
 export { queryNearbyBuildings } from "./mapQueries";
 
@@ -36,6 +42,8 @@ export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./
 export {
   createTerrainSampler,
   preloadTerrainTiles,
+  preloadTerrainBox,
+  DETAILED_TERRAIN_ZOOM,
   isTerrainReady,
   clearTerrainCache,
 } from "./terrain";

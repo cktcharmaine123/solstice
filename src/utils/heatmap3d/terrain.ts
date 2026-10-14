@@ -91,11 +91,12 @@ function bilinearSample(elevations: Float32Array, px: number, py: number): numbe
 }
 
 const ZOOM = 12;
+export const DETAILED_TERRAIN_ZOOM = 15;
 
-export function createTerrainSampler(): TerrainSampler {
+export function createTerrainSampler(zoom: number = ZOOM): TerrainSampler {
   return (lng: number, lat: number): number | null => {
-    const { x, y, px, py } = lngLatToTileXY(lng, lat, ZOOM);
-    const tile = tileCache.get(tileKey(x, y));
+    const { x, y, px, py } = lngLatToTileXY(lng, lat, zoom);
+    const tile = tileCache.get(tileKey(zoom, x, y));
     if (!tile) return null;
     return bilinearSample(tile, px, py);
   };
@@ -105,8 +106,9 @@ export async function preloadTerrainTiles(
   centerLng: number,
   centerLat: number,
   radiusTiles: number = 3,
+  zoom: number = ZOOM,
 ): Promise<void> {
-  const n = Math.pow(2, ZOOM);
+  const n = Math.pow(2, zoom);
   const cx = Math.floor(((centerLng + 180) / 360) * n);
   const latRad = (centerLat * Math.PI) / 180;
   const cy = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
@@ -117,15 +119,33 @@ export async function preloadTerrainTiles(
       const tx = cx + dx;
       const ty = cy + dy;
       if (tx < 0 || tx >= n || ty < 0 || ty >= n) continue;
-      promises.push(fetchTerrainTile(ZOOM, tx, ty));
+      promises.push(fetchTerrainTile(zoom, tx, ty));
     }
   }
   await Promise.all(promises);
 }
 
+/** Loads every tile touching the lng/lat box; false if any of them failed. */
+export async function preloadTerrainBox(
+  west: number,
+  south: number,
+  east: number,
+  north: number,
+  zoom: number,
+): Promise<boolean> {
+  const a = lngLatToTileXY(west, north, zoom);
+  const b = lngLatToTileXY(east, south, zoom);
+  const promises: Promise<Float32Array | null>[] = [];
+  for (let x = a.x; x <= b.x; x++) {
+    for (let y = a.y; y <= b.y; y++) promises.push(fetchTerrainTile(zoom, x, y));
+  }
+  const tiles = await Promise.all(promises);
+  return tiles.every((t) => t !== null);
+}
+
 export function isTerrainReady(lng: number, lat: number): boolean {
   const { x, y } = lngLatToTileXY(lng, lat, ZOOM);
-  return tileCache.has(tileKey(x, y));
+  return tileCache.has(tileKey(ZOOM, x, y));
 }
 
 export function clearTerrainCache(): void {

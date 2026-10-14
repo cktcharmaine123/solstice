@@ -131,6 +131,8 @@ export function calculate3DHeatmap(
         geometry: { type: "Polygon", coordinates: cell.rings.map(toLngLatRing) },
         baseHeight: buildingHeight + offset,
         topHeight: buildingHeight + ROOF_LIFT_M + offset,
+        groundBottom: buildingHeight,
+        groundTop: buildingHeight,
         hours,
         color: sunlightColor(hours),
       });
@@ -149,6 +151,8 @@ export function calculate3DHeatmap(
         geometry: { type: "Polygon", coordinates: [toLngLatRing(cell.quad)] },
         baseHeight: Math.max(0, cell.bottom + offset),
         topHeight: cell.top + offset,
+        groundBottom: cell.bottom,
+        groundTop: cell.top,
         hours,
         color: sunlightColor(hours),
       });

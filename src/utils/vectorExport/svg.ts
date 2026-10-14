@@ -22,11 +22,11 @@ const STYLE = {
   label: "#6b6b6b",
 };
 
-function esc(text: string): string {
+export function esc(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c] as string);
 }
 
-function layerId(name: string): string {
+export function layerId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "layer";
 }
 

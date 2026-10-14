@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { getSavedGraphs, type SavedGraph } from "../../utils/savedGraphs";
-import { isDiagramSpec } from "../../utils/vectorExport";
+import { exportDiagram, isDiagramSpec } from "../../utils/vectorExport";
 import { VectorExportDialog } from "../../components/VectorExportDialog";
 import { useIsDesktop } from "../../lib/useIsDesktop";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -63,6 +63,8 @@ export const GraphDetailScreen = (): JSX.Element => {
     }
   };
 
+  const diagram = graph && isDiagramSpec(graph.diagram) ? graph.diagram : null;
+
   return (
     <main className="app-container mx-auto flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-white">
       <header className="flex h-[88px] items-start justify-between px-6 pt-[47px]" aria-label="Saved graph controls">
@@ -117,7 +119,7 @@ export const GraphDetailScreen = (): JSX.Element => {
         <VectorExportDialog
           open={exportOpen}
           onClose={() => setExportOpen(false)}
-          diagram={isDiagramSpec(graph.diagram) ? graph.diagram : null}
+          exportFile={diagram ? (format, skipMissing) => exportDiagram(diagram, format, skipMissing) : null}
           fileBaseName={graph.name}
           onDownloadPng={() => void downloadGraph()}
         />

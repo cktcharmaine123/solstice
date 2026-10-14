@@ -27,7 +27,7 @@ import { toPng } from "html-to-image";
 import domToImage from "dom-to-image-more";
 import { supabase } from "../../lib/supabase";
 import { formatGraphName, saveGraph } from "../../utils/savedGraphs";
-import { createDiagramSpec, type DiagramPath } from "../../utils/vectorExport";
+import { createDiagramSpec, exportDiagram, type DiagramPath } from "../../utils/vectorExport";
 import { VectorExportDialog } from "../../components/VectorExportDialog";
 import { useIsDesktop } from "../../lib/useIsDesktop";
 import { peekPendingAnalysisState, setPendingAnalysisState, setPendingRevert } from "../../utils/revertStore";
@@ -1017,7 +1017,7 @@ function AnalysisScreenContent(): JSX.Element {
               onClick={() => {
                 sessionStorage.setItem("siteLat", center.lat.toString());
                 sessionStorage.setItem("siteLng", center.lng.toString());
-                navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}`);
+                navigate(`/analysis-3d?lat=${center.lat}&lng=${center.lng}&location=${encodeURIComponent(locationLabel)}`);
               }}
               className="h-12 shrink-0 justify-start gap-1 rounded-md border-[#e6e6e6] bg-white px-3 py-2 shadow-none hover:bg-neutral-50"
             >
@@ -1461,7 +1461,7 @@ function AnalysisScreenContent(): JSX.Element {
         <VectorExportDialog
           open={exportOpen}
           onClose={() => setExportOpen(false)}
-          diagram={diagramSpec}
+          exportFile={diagramSpec ? (format, skipMissing) => exportDiagram(diagramSpec, format, skipMissing) : null}
           fileBaseName={`${locationLabel} ${formatShortDate(selectedDate)}`}
         />
       )}

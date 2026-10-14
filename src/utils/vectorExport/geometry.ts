@@ -26,12 +26,19 @@ export function computeHalfExtent(center: { lat: number; lng: number }, pointSet
 
 /** Sutherland-Hodgman clip of a closed ring to the square [-h, h]. */
 export function clipRing(ring: Ring, h: number): Ring {
+  return clipRingToBox(ring, { minX: -h, minY: -h, maxX: h, maxY: h });
+}
+
+export type Box = { minX: number; minY: number; maxX: number; maxY: number };
+
+/** Sutherland-Hodgman clip of a closed ring to an axis-aligned box. */
+export function clipRingToBox(ring: Ring, box: Box): Ring {
   let out = ring;
   const edges: [(p: Pt) => boolean, (a: Pt, b: Pt) => Pt][] = [
-    [(p) => p[0] >= -h, (a, b) => lerpAt(a, b, 0, -h)],
-    [(p) => p[0] <= h, (a, b) => lerpAt(a, b, 0, h)],
-    [(p) => p[1] >= -h, (a, b) => lerpAt(a, b, 1, -h)],
-    [(p) => p[1] <= h, (a, b) => lerpAt(a, b, 1, h)],
+    [(p) => p[0] >= box.minX, (a, b) => lerpAt(a, b, 0, box.minX)],
+    [(p) => p[0] <= box.maxX, (a, b) => lerpAt(a, b, 0, box.maxX)],
+    [(p) => p[1] >= box.minY, (a, b) => lerpAt(a, b, 1, box.minY)],
+    [(p) => p[1] <= box.maxY, (a, b) => lerpAt(a, b, 1, box.maxY)],
   ];
   for (const [inside, cut] of edges) {
     if (out.length === 0) break;

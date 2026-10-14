@@ -18,6 +18,10 @@ export const BUILDING_HEIGHT_EXPR = ["coalesce", ["get", "render_height"], ["get
 export const BUILDING_BASE_EXPR = ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0];
 
 /** Extends raised pieces slightly downward so they meet the piece below instead of hovering over a seam. */
+export function displayBase(base: number): number {
+  return base > 0 ? Math.max(0.1, base - RAISED_PART_OVERLAP_M) : 0;
+}
+
 export const DISPLAY_BASE_EXPR = [
   "case",
   [">", ["to-number", BUILDING_BASE_EXPR], 0],
@@ -38,3 +42,9 @@ export const RENDERABLE_BUILDING_FILTER = [
     MIN_PART_THICKNESS_M,
   ],
 ];
+
+export function isRenderablePart(props: any): boolean {
+  if (props?.hide_3d === true) return false;
+  const { height, base } = partHeights(props);
+  return height - base >= MIN_PART_THICKNESS_M;
+}

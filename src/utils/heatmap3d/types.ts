@@ -10,6 +10,9 @@ export type SurfacePatch = {
   geometry: any;
   baseHeight: number;
   topHeight: number;
+  /** Heights above the building's own ground level, without the per-patch display offset. */
+  groundBottom: number;
+  groundTop: number;
   hours: number;
   color: string;
 };
