@@ -231,7 +231,7 @@ const en: Dictionary = {
   "analysis.hideSunPath": "Hide sun path",
   "analysis.showSunPath": "Show sun path",
 
-  "threed.focusBuilding": "Focus on building",
+  "threed.focusBuilding": "Show heatmap",
   "threed.focusBuildingActive": "Tap a building",
   "threed.focusedOnBuilding": "Focused on building",
   "threed.clearFocus": "Clear focus",
@@ -367,7 +367,7 @@ const zhTW: Dictionary = {
   "analysis.hideSunPath": "隱藏太陽路徑",
   "analysis.showSunPath": "顯示太陽路徑",
 
-  "threed.focusBuilding": "聚焦建築物",
+  "threed.focusBuilding": "顯示熱力圖",
   "threed.focusBuildingActive": "點擊建築物",
   "threed.focusedOnBuilding": "已聚焦建築物",
   "threed.clearFocus": "清除聚焦",
