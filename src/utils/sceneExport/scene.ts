@@ -1,7 +1,6 @@
 import earcut from "earcut";
 import {
   allPolygonRings,
-  buildingCentroid,
   computeBuildingFillers,
   createLocalFrame,
   displayBase,
@@ -25,7 +24,7 @@ export const SCENE_HALF_EXTENT_M = 150;
 /** Extra ground loaded around the area so bump removal near its edges has data to work with. */
 export const TERRAIN_MARGIN_M = 120;
 const CONTOUR_INTERVAL_M = 5;
-const HEATMAP_OFFSET_M = 0.05;
+const HEATMAP_OFFSET_M = 0.15;
 const BASE_EMBED_M = 0.5;
 const MIN_AREA_M2 = 0.5;
 
@@ -103,6 +102,17 @@ function prismFaces(rings: Rings, bottom: number, top: number, seamBox: Box | nu
   return faces;
 }
 
+const OVERLAP_SHARE = 0.5;
+
+/** True when most of the shape (its centre and points just inside each corner) lies within the footprint. */
+function mostlyInside(rings: Rings, footprint: Rings[]): boolean {
+  const outer = rings[0];
+  const [cx, cy] = ringCentroid(outer);
+  const samples: Pt[] = [[cx, cy], ...outer.map(([x, y]) => [x + (cx - x) * 0.15, y + (cy - y) * 0.15] as Pt)];
+  const inside = samples.filter(([x, y]) => findHitPolygon(x, y, { type: "MultiPolygon", coordinates: footprint }) !== null);
+  return inside.length / samples.length >= OVERLAP_SHARE;
+}
+
 function lowestGround(rings: Rings, grid: TerrainGrid): number {
   return Math.min(...rings[0].map(([x, y]) => gridHeight(grid, x, y)));
 }
@@ -115,11 +125,8 @@ function surroundingBuildings(
   focused: FocusedBuilding,
 ): SceneFace[][] {
   const out: SceneFace[][] = [];
-  const isSelected = (geometry: any) => {
-    if (!focused) return false;
-    const c = buildingCentroid(geometry);
-    return !!c && findHitPolygon(c[0], c[1], focused.geometry) !== null;
-  };
+  const wideBox: Box = { minX: -2 * h, minY: -2 * h, maxX: 2 * h, maxY: 2 * h };
+  const footprint = focused ? localPolygons(focused.geometry, frame, wideBox) : [];
 
   for (const tile of buildingsFromTiles(tiles)) {
     const [w, s, e, n] = tile.bounds;
@@ -139,8 +146,9 @@ function surroundingBuildings(
     }
 
     for (const piece of pieces) {
-      if (piece.top - piece.base < 0.1 || isSelected(piece.geometry)) continue;
+      if (piece.top - piece.base < 0.1) continue;
       for (const rings of localPolygons(piece.geometry, frame, box)) {
+        if (footprint.length > 0 && mostlyInside(rings, footprint)) continue;
         const [cx, cy] = ringCentroid(rings[0]);
         const ground = gridHeight(grid, cx, cy);
         const bottom = piece.base <= 0.01 ? lowestGround(rings, grid) - BASE_EMBED_M : ground + piece.base;

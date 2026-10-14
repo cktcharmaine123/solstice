@@ -2,8 +2,10 @@ import { createLocalFrame, createTerrainSampler, DETAILED_TERRAIN_ZOOM, preloadT
 import { ExportDataError, fileBlob, type ExportFormat } from "../vectorExport";
 import { fetchMapTiles, type MapTile } from "../vectorExport/mapData";
 import { buildSceneDxf } from "./dxf";
+import { buildSceneObj, MTL_FILE, OBJ_FILE } from "./obj";
 import { buildScene3D, SCENE_HALF_EXTENT_M, TERRAIN_MARGIN_M, type Scene3DInput } from "./scene";
 import { buildSceneSvg } from "./svg";
+import { zipFiles } from "./zip";
 
 export type { Scene3DInput };
 
@@ -35,5 +37,12 @@ export async function exportScene3D(input: Scene3DInput, format: ExportFormat, s
   if (!skipMissing && !terrainOk) throw new ExportDataError("export3d.terrainFailed", "export3d.flatGround");
 
   const scene = buildScene3D(input, tiles ?? [], terrainOk ? createTerrainSampler(DETAILED_TERRAIN_ZOOM) : null);
+  if (format === "obj") {
+    const { obj, mtl } = buildSceneObj(scene);
+    return zipFiles([
+      { name: OBJ_FILE, content: obj },
+      { name: MTL_FILE, content: mtl },
+    ]);
+  }
   return fileBlob(format === "svg" ? buildSceneSvg(scene) : buildSceneDxf(scene), format);
 }

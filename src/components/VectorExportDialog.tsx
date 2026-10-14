@@ -1,9 +1,9 @@
-import { FileImage, Loader2, PenTool, Ruler, XIcon } from "lucide-react";
+import { Box, FileImage, Loader2, PenTool, Ruler, XIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { TranslationKey } from "../i18n/translations";
-import { downloadBlob, ExportDataError, safeFileName, type ExportFormat } from "../utils/vectorExport";
+import { downloadBlob, ExportDataError, fileExtension, safeFileName, type ExportFormat } from "../utils/vectorExport";
 
 export type ExportFile = (format: ExportFormat, skipMissing: boolean) => Promise<Blob>;
 
@@ -17,6 +17,8 @@ type Props = {
   title?: string;
   svgDescription?: string;
   dxfDescription?: string;
+  /** Shows the OBJ option when set. */
+  objDescription?: string;
   unavailableMessage?: string;
   notice?: string;
 };
@@ -36,6 +38,7 @@ export function VectorExportDialog({
   title,
   svgDescription,
   dxfDescription,
+  objDescription,
   unavailableMessage,
   notice,
 }: Props): JSX.Element | null {
@@ -63,7 +66,7 @@ export function VectorExportDialog({
     if (!exportFile || busy) return;
     setStatus({ kind: "busy", format });
     try {
-      downloadBlob(await exportFile(format, skipMissing), `${safeFileName(fileBaseName)}.${format}`);
+      downloadBlob(await exportFile(format, skipMissing), `${safeFileName(fileBaseName)}.${fileExtension(format)}`);
       setStatus({ kind: "idle" });
     } catch (err) {
       if (err instanceof ExportDataError) {
@@ -128,6 +131,16 @@ export function VectorExportDialog({
             loading={status.kind === "busy" && status.format === "dxf"}
             onClick={() => void runExport("dxf", false)}
           />
+          {objDescription && (
+            <ExportOption
+              icon={<Box className="h-5 w-5" aria-hidden="true" />}
+              title={t("export.obj")}
+              description={objDescription}
+              disabled={!exportFile || busy}
+              loading={status.kind === "busy" && status.format === "obj"}
+              onClick={() => void runExport("obj", false)}
+            />
+          )}
         </div>
 
         <div className="mt-4 min-h-[20px] font-['Inter'] text-xs leading-[1.5]" aria-live="polite">

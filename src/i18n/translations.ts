@@ -49,6 +49,7 @@ export type TranslationKey =
   | "export.svg"
   | "export.svgDesc"
   | "export.dxf"
+  | "export.obj"
   | "export.dxfDesc"
   | "export.preparing"
   | "export.failed"
@@ -115,6 +116,7 @@ export type TranslationKey =
   | "export3d.title"
   | "export3d.svgDesc"
   | "export3d.dxfDesc"
+  | "export3d.objDesc"
   | "export3d.noHeatmap"
   | "export3d.waitForAnalysis"
   | "export3d.mapFailed"
@@ -179,6 +181,7 @@ const en: Dictionary = {
   "export.svg": "Vector drawing (SVG)",
   "export.svgDesc": "Editable layers for Illustrator, Figma or Inkscape",
   "export.dxf": "CAD drawing (DXF)",
+  "export.obj": "3D model with colours (OBJ)",
   "export.dxfDesc": "Real scale in metres, north up, site at the origin",
   "export.preparing": "Preparing export...",
   "export.failed": "The export could not be created. Please try again.",
@@ -247,6 +250,7 @@ const en: Dictionary = {
   "export3d.title": "Export 3D view",
   "export3d.svgDesc": "Isometric drawing from the south-west, with editable layers",
   "export3d.dxfDesc": "3D model in metres with terrain, for SketchUp, Rhino or AutoCAD",
+  "export3d.objDesc": "Coloured model that shows the heatmap in Rhino's Rendered mode. Unzip and keep both files together.",
   "export3d.noHeatmap": "No building is selected, so the export won't include the sunlight heatmap.",
   "export3d.waitForAnalysis": "Please wait for the sunlight analysis to finish.",
   "export3d.mapFailed": "The surrounding buildings and streets couldn't be loaded. You can still export the selected building and its heatmap.",
@@ -313,6 +317,7 @@ const zhTW: Dictionary = {
   "export.svg": "向量圖（SVG）",
   "export.svgDesc": "可在 Illustrator、Figma 或 Inkscape 中編輯的圖層",
   "export.dxf": "CAD 圖（DXF）",
+  "export.obj": "彩色3D模型（OBJ）",
   "export.dxfDesc": "以公尺為實際比例，北方朝上，基地位於原點",
   "export.preparing": "正在準備匯出...",
   "export.failed": "無法建立匯出檔案，請再試一次。",
@@ -381,6 +386,7 @@ const zhTW: Dictionary = {
   "export3d.title": "匯出3D視圖",
   "export3d.svgDesc": "從西南方的等角圖，圖層可編輯",
   "export3d.dxfDesc": "以公尺為單位並包含地形的3D模型，適用於 SketchUp、Rhino 或 AutoCAD",
+  "export3d.objDesc": "彩色模型，可在 Rhino 的渲染模式中顯示熱圖。解壓後請將兩個檔案放在一起。",
   "export3d.noHeatmap": "尚未選擇建築物，匯出檔案將不包含日照熱圖。",
   "export3d.waitForAnalysis": "請等待日照分析完成。",
   "export3d.mapFailed": "無法載入周邊建築物及街道。您仍可匯出所選建築物及其熱圖。",

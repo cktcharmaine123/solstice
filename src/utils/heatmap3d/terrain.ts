@@ -1,9 +1,6 @@
 import type { TerrainSampler } from "./types";
 
 const TERRAIN_TILE_SIZE = 256;
-const TERRARIUM_RED = 256;
-const TERRARIUM_GREEN = 256;
-const TERRARIUM_BLUE = 256;
 
 type TileCache = Map<string, Float32Array>;
 const tileCache: TileCache = new Map();
@@ -27,7 +24,7 @@ function lngLatToTileXY(lng: number, lat: number, z: number): { x: number; y: nu
 }
 
 function decodeTerrarium(r: number, g: number, b: number): number {
-  return (r * TERRARIUM_RED + g * TERRARIUM_GREEN + b * TERRARIUM_BLUE) / 256 - 32768;
+  return r * 256 + g + b / 256 - 32768;
 }
 
 const inflightTiles: Map<string, Promise<Float32Array | null>> = new Map();

@@ -43,6 +43,10 @@ export function fileBlob(content: string, format: ExportFormat): Blob {
   return new Blob([content], { type: format === "svg" ? "image/svg+xml;charset=utf-8" : "application/dxf" });
 }
 
+export function fileExtension(format: ExportFormat): string {
+  return format === "obj" ? "zip" : format;
+}
+
 export async function exportDiagram(spec: DiagramSpec, format: ExportFormat, skipMissing: boolean): Promise<Blob> {
   let map = emptyMapOutlines();
   if (!skipMissing) {

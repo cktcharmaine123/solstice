@@ -39,4 +39,4 @@ export type MapOutlines = {
   labels: StreetLabel[];
 };
 
-export type ExportFormat = "svg" | "dxf";
+export type ExportFormat = "svg" | "dxf" | "obj";

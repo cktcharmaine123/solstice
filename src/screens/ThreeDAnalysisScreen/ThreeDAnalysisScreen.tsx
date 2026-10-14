@@ -1164,6 +1164,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           title={t("export3d.title")}
           svgDescription={t("export3d.svgDesc")}
           dxfDescription={t("export3d.dxfDesc")}
+          objDescription={t("export3d.objDesc")}
           unavailableMessage={t("export3d.waitForAnalysis")}
           notice={focusedBuilding ? undefined : t("export3d.noHeatmap")}
         />
