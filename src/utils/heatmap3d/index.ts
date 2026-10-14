@@ -17,7 +17,6 @@ export {
   pointInGeometry,
   findHitPolygon,
   polygonCentroid,
-  offsetPoint,
 } from "./geometry";
 
 export { sunlightColor } from "./color";

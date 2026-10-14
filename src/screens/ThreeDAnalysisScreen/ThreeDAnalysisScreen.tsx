@@ -779,8 +779,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         focusedBuilding.lat,
         selectedDate,
         nearbyBuildings,
-        5,
-        8,
         terrainSamplerRef.current,
         focusedBuilding.groundElevation,
       );

@@ -15,10 +15,10 @@ export function renderHeatmapLayers(
   removeHeatmapLayers(map);
 
   if (focusedBuilding && focusedBuilding.geometry) {
-    addHighlightLayer(map, focusedBuilding);
-
     if (heatmapPatches.length > 0) {
       addHeatmapLayer(map, heatmapPatches);
+    } else {
+      addHighlightLayer(map, focusedBuilding);
     }
   }
 
@@ -47,7 +47,6 @@ function removeHeatmapLayers(map: any): void {
 }
 
 function addHighlightLayer(map: any, focusedBuilding: NonNullable<FocusedBuilding>): void {
-  const groundElev = focusedBuilding.groundElevation ?? 0;
   try {
     map.addSource(HIGHLIGHT_SOURCE, {
       type: "geojson",
@@ -64,8 +63,8 @@ function addHighlightLayer(map: any, focusedBuilding: NonNullable<FocusedBuildin
       minzoom: 14,
       paint: {
         "fill-extrusion-color": "#a8a8a8",
-        "fill-extrusion-height": groundElev + focusedBuilding.height,
-        "fill-extrusion-base": groundElev + focusedBuilding.baseHeight,
+        "fill-extrusion-height": focusedBuilding.height + 0.2,
+        "fill-extrusion-base": focusedBuilding.baseHeight,
         "fill-extrusion-opacity": 0.3,
       },
     });
@@ -104,7 +103,7 @@ function addHeatmapLayer(map: any, heatmapPatches: SurfacePatch[]): void {
         "fill-extrusion-color": ["get", "color"],
         "fill-extrusion-height": ["get", "topHeight"],
         "fill-extrusion-base": ["get", "baseHeight"],
-        "fill-extrusion-opacity": 0.75,
+        "fill-extrusion-opacity": 0.92,
       },
     });
   } catch (e) {

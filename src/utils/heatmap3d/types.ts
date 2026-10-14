@@ -15,10 +15,8 @@ export type SurfacePatch = {
 };
 
 export type NearbyBuilding = {
-  lat: number;
-  lng: number;
+  footprint: number[][][];
   height: number;
-  baseHeight: number;
   groundElevation: number;
 };
 

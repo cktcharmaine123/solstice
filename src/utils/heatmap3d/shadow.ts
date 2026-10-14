@@ -1,103 +1,92 @@
-import { METERS_PER_DEG, type NearbyBuilding, type TerrainSampler } from "./types";
+import type { Pt } from "./geometry";
 
-export function isPointShadowedByBuilding(
-  pointLng: number,
-  pointLat: number,
-  pointHeight: number,
-  sunDirX: number,
-  sunDirY: number,
-  tanAlt: number,
-  nearby: NearbyBuilding[],
-  terrainSampler?: TerrainSampler | null,
-  pointGroundElevation?: number,
-): boolean {
-  const groundElev = pointGroundElevation ?? (terrainSampler ? (terrainSampler(pointLng, pointLat) ?? 0) : 0);
-  const absoluteHeight = groundElev + pointHeight;
+export type Obstacle = { rings: Pt[][]; top: number };
 
-  for (const nb of nearby) {
-    const dLng = (nb.lng - pointLng) * METERS_PER_DEG * Math.cos(pointLat * Math.PI / 180);
-    const dLat = (nb.lat - pointLat) * METERS_PER_DEG;
-    const along = dLng * sunDirX + dLat * sunDirY;
-    if (along <= 0) continue;
-    const perp = Math.abs(dLng * sunDirY - dLat * sunDirX);
-    const shadowLen = tanAlt > 0.05 ? nb.height / tanAlt : 300;
-    if (shadowLen < along) continue;
-    if (perp > 25) continue;
-    const nbAbsoluteTop = nb.groundElevation + nb.height;
-    if (nbAbsoluteTop < absoluteHeight) continue;
-    return true;
-  }
+export type HeightGrid = {
+  originX: number;
+  originY: number;
+  cellSize: number;
+  cols: number;
+  rows: number;
+  data: Float32Array;
+  maxTop: number;
+  reach: number;
+};
 
-  if (terrainSampler) {
-    const stepCount = 8;
-    for (let s = 1; s <= stepCount; s++) {
-      const frac = s / stepCount;
-      const distM = frac * 250;
-      const sampleLng = pointLng + (sunDirX * distM) / (METERS_PER_DEG * Math.cos(pointLat * Math.PI / 180));
-      const sampleLat = pointLat + (sunDirY * distM) / METERS_PER_DEG;
-      const terrainElev = terrainSampler(sampleLng, sampleLat);
-      if (terrainElev === null) continue;
-      const terrainAbove = terrainElev - groundElev;
-      const sunHeightAtDist = distM * tanAlt;
-      if (terrainAbove > sunHeightAtDist && terrainAbove > pointHeight) {
-        return true;
+const EMPTY = -1e9;
+
+/** Rasterizes building footprints (local meters) into a grid of absolute roof heights. */
+export function buildHeightGrid(obstacles: Obstacle[], halfExtent: number, cellSize: number): HeightGrid {
+  const cols = Math.ceil((halfExtent * 2) / cellSize);
+  const rows = cols;
+  const originX = -halfExtent;
+  const originY = -halfExtent;
+  const data = new Float32Array(cols * rows).fill(EMPTY);
+  let maxTop = EMPTY;
+
+  for (const ob of obstacles) {
+    let minY = Infinity, maxY = -Infinity;
+    for (const ring of ob.rings) for (const p of ring) { minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); }
+    const r0 = Math.max(0, Math.floor((minY - originY) / cellSize));
+    const r1 = Math.min(rows - 1, Math.floor((maxY - originY) / cellSize));
+    if (r0 > r1) continue;
+    maxTop = Math.max(maxTop, ob.top);
+
+    for (let r = r0; r <= r1; r++) {
+      const yc = originY + (r + 0.5) * cellSize;
+      const xs: number[] = [];
+      for (const ring of ob.rings) {
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i];
+          const b = ring[(i + 1) % ring.length];
+          if ((a[1] > yc) !== (b[1] > yc)) {
+            xs.push(a[0] + ((yc - a[1]) / (b[1] - a[1])) * (b[0] - a[0]));
+          }
+        }
+      }
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        const c0 = Math.max(0, Math.ceil((xs[k] - originX) / cellSize - 0.5));
+        const c1 = Math.min(cols - 1, Math.floor((xs[k + 1] - originX) / cellSize - 0.5));
+        for (let c = c0; c <= c1; c++) {
+          const idx = r * cols + c;
+          if (data[idx] < ob.top) data[idx] = ob.top;
+        }
       }
     }
   }
 
+  return { originX, originY, cellSize, cols, rows, data, maxTop, reach: halfExtent * 2 };
+}
+
+/** Marches from a point toward the sun and reports whether any building rises above the ray. */
+export function isBlockedByBuildings(
+  grid: HeightGrid,
+  x: number,
+  y: number,
+  z: number,
+  sunX: number,
+  sunY: number,
+  tanAlt: number,
+): boolean {
+  if (grid.maxTop <= z) return false;
+  const maxDist = Math.min((grid.maxTop - z) / tanAlt, grid.reach);
+  const step = grid.cellSize * 0.75;
+  for (let d = step; d <= maxDist; d += step) {
+    const c = Math.floor((x + sunX * d - grid.originX) / grid.cellSize);
+    const r = Math.floor((y + sunY * d - grid.originY) / grid.cellSize);
+    if (c < 0 || r < 0 || c >= grid.cols || r >= grid.rows) return false;
+    if (grid.data[r * grid.cols + c] > z + d * tanAlt) return true;
+  }
   return false;
 }
 
-export function isWallSegmentShadowed(
-  segLng: number,
-  segLat: number,
-  segHeight: number,
-  wallNormalX: number,
-  wallNormalY: number,
-  sunDirX: number,
-  sunDirY: number,
-  sunAltRad: number,
-  tanAlt: number,
-  nearby: NearbyBuilding[],
-  terrainSampler?: TerrainSampler | null,
-  segGroundElevation?: number,
-): boolean {
-  const dot = sunDirX * wallNormalX + sunDirY * wallNormalY;
-  if (dot <= 0) return true;
+export type TerrainProfile = { dist: number; elev: number }[];
 
-  const groundElev = segGroundElevation ?? (terrainSampler ? (terrainSampler(segLng, segLat) ?? 0) : 0);
-  const absoluteSegHeight = groundElev + segHeight;
-
-  for (const nb of nearby) {
-    const dLng = (nb.lng - segLng) * METERS_PER_DEG * Math.cos(segLat * Math.PI / 180);
-    const dLat = (nb.lat - segLat) * METERS_PER_DEG;
-    const along = dLng * sunDirX + dLat * sunDirY;
-    if (along <= 0) continue;
-    const perp = Math.abs(dLng * sunDirY - dLat * sunDirX);
-    const shadowLen = tanAlt > 0.05 ? nb.height / tanAlt : 300;
-    if (shadowLen < along) continue;
-    if (perp > 25) continue;
-    const nbAbsoluteTop = nb.groundElevation + nb.height;
-    if (nbAbsoluteTop < absoluteSegHeight) continue;
-    return true;
+export function isBlockedByTerrain(profile: TerrainProfile | null, z: number, tanAlt: number): boolean {
+  if (!profile) return false;
+  for (const s of profile) {
+    if (s.elev > z + s.dist * tanAlt) return true;
   }
-
-  if (terrainSampler) {
-    const stepCount = 8;
-    for (let s = 1; s <= stepCount; s++) {
-      const frac = s / stepCount;
-      const distM = frac * 250;
-      const sampleLng = segLng + (sunDirX * distM) / (METERS_PER_DEG * Math.cos(segLat * Math.PI / 180));
-      const sampleLat = segLat + (sunDirY * distM) / METERS_PER_DEG;
-      const terrainElev = terrainSampler(sampleLng, sampleLat);
-      if (terrainElev === null) continue;
-      const terrainAbove = terrainElev - groundElev;
-      const sunHeightAtDist = distM * tanAlt;
-      if (terrainAbove > sunHeightAtDist && terrainAbove > segHeight) {
-        return true;
-      }
-    }
-  }
-
   return false;
 }

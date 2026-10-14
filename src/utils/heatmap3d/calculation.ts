@@ -1,14 +1,21 @@
 import * as SunCalc from "suncalc";
-import {
-  METERS_PER_DEG,
-  type NearbyBuilding,
-  type SurfacePatch,
-  type HeatmapResult,
-  type TerrainSampler,
-} from "./types";
-import { subdivideRoof, getWallSegments, offsetPoint } from "./subdivision";
-import { isPointShadowedByBuilding, isWallSegmentShadowed } from "./shadow";
+import { type NearbyBuilding, type SurfacePatch, type HeatmapResult, type TerrainSampler } from "./types";
+import { createLocalFrame, openRing, polygonRings, ringArea, type Pt } from "./geometry";
+import { subdivideRoof, subdivideWalls } from "./subdivision";
+import { buildHeightGrid, isBlockedByBuildings, isBlockedByTerrain, type Obstacle, type TerrainProfile } from "./shadow";
 import { sunlightColor } from "./color";
+
+const STEP_MIN = 15;
+const GRID_HALF_EXTENT_M = 350;
+const GRID_CELL_M = 1;
+const ROOF_LIFT_M = 0.3;
+const TERRAIN_NEAR_M = 40;
+const TERRAIN_FAR_M = 2000;
+const TERRAIN_STEP_M = 40;
+
+type SunStep = { up: boolean; tanAlt: number; sunX: number; sunY: number; terrain: TerrainProfile | null };
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export function calculate3DHeatmap(
   buildingGeometry: any,
@@ -18,8 +25,6 @@ export function calculate3DHeatmap(
   buildingCenterLat: number,
   selectedDate: Date,
   nearbyBuildings: NearbyBuilding[],
-  roofPatchSize: number = 5,
-  wallSegmentSize: number = 8,
   terrainSampler?: TerrainSampler | null,
   buildingGroundElevation?: number,
 ): HeatmapResult {
@@ -27,138 +32,122 @@ export function calculate3DHeatmap(
   if (!times.sunrise || !times.sunset || isNaN(times.sunrise.getTime()) || isNaN(times.sunset.getTime())) {
     return { patches: [], avgHours: 0 };
   }
-
   const sunriseMs = times.sunrise.getTime();
   const sunsetMs = times.sunset.getTime();
   if (sunsetMs <= sunriseMs) return { patches: [], avgHours: 0 };
 
-  const STEP_MIN = 30;
-  const totalSteps = Math.ceil((sunsetMs - sunriseMs) / (1000 * 60 * STEP_MIN));
+  const frame = createLocalFrame(buildingCenterLng, buildingCenterLat);
+  const ground = buildingGroundElevation ??
+    (terrainSampler ? (terrainSampler(buildingCenterLng, buildingCenterLat) ?? 0) : 0);
+
+  const rings: Pt[][] = polygonRings(buildingGeometry)
+    .map((r) => openRing(r).map(([lng, lat]) => frame.toLocal(lng, lat)))
+    .filter((r) => r.length >= 3);
+  if (rings.length === 0) return { patches: [], avgHours: 0 };
+
+  const obstacles: Obstacle[] = [{ rings, top: ground + buildingHeight }];
+  for (const nb of nearbyBuildings) {
+    const nbRings = nb.footprint
+      .map((r) => openRing(r).map(([lng, lat]) => frame.toLocal(lng, lat)))
+      .filter((r) => r.length >= 3);
+    if (nbRings.length > 0) obstacles.push({ rings: nbRings, top: nb.groundElevation + nb.height });
+  }
+  const grid = buildHeightGrid(obstacles, GRID_HALF_EXTENT_M, GRID_CELL_M);
+
+  const totalSteps = Math.max(1, Math.ceil((sunsetMs - sunriseMs) / (1000 * 60 * STEP_MIN)));
   const dayLengthHours = (sunsetMs - sunriseMs) / (1000 * 60 * 60);
   const sampleCount = totalSteps + 1;
-
-  const sunSteps: { altRad: number; azRad: number; tanAlt: number; sunDirX: number; sunDirY: number }[] = [];
+  const sunSteps: SunStep[] = [];
   for (let i = 0; i <= totalSteps; i++) {
-    const stepTime = new Date(sunriseMs + (i / totalSteps) * (sunsetMs - sunriseMs));
-    const pos = SunCalc.getPosition(stepTime, buildingCenterLat, buildingCenterLng);
-
-    if (pos.altitude <= 0) {
-      sunSteps.push({ altRad: 0, azRad: 0, tanAlt: 0, sunDirX: 0, sunDirY: 0 });
-    } else {
-      const altRad = pos.altitude;
-      const azRad = pos.azimuth;
-      sunSteps.push({
-        altRad,
-        azRad,
-        tanAlt: Math.tan(altRad),
-        sunDirX: -Math.sin(azRad),
-        sunDirY: -Math.cos(azRad),
-      });
+    const t = new Date(sunriseMs + (i / totalSteps) * (sunsetMs - sunriseMs));
+    const pos = SunCalc.getPosition(t, buildingCenterLat, buildingCenterLng);
+    // suncalc v2 reports degrees, with azimuth measured clockwise from north.
+    const altRad = (pos.altitude * Math.PI) / 180;
+    const azRad = (pos.azimuth * Math.PI) / 180;
+    if (altRad <= 0.005) {
+      sunSteps.push({ up: false, tanAlt: 0, sunX: 0, sunY: 0, terrain: null });
+      continue;
     }
+    const sunX = Math.sin(azRad);
+    const sunY = Math.cos(azRad);
+    let terrain: TerrainProfile | null = null;
+    if (terrainSampler) {
+      terrain = [];
+      for (let d = TERRAIN_NEAR_M; d <= TERRAIN_FAR_M; d += TERRAIN_STEP_M) {
+        const [lng, lat] = frame.toLngLat(sunX * d, sunY * d);
+        const elev = terrainSampler(lng, lat);
+        if (elev !== null) terrain.push({ dist: d, elev });
+      }
+    }
+    sunSteps.push({ up: true, tanAlt: Math.tan(altRad), sunX, sunY, terrain });
   }
 
-  const groundElev = buildingGroundElevation ?? (terrainSampler ? (terrainSampler(buildingCenterLng, buildingCenterLat) ?? 0) : 0);
+  const litHours = (x: number, y: number, z: number, normal?: Pt): number => {
+    let lit = 0;
+    for (const s of sunSteps) {
+      if (!s.up) continue;
+      if (normal && s.sunX * normal[0] + s.sunY * normal[1] <= 0) continue;
+      if (isBlockedByBuildings(grid, x, y, z, s.sunX, s.sunY, s.tanAlt)) continue;
+      if (isBlockedByTerrain(s.terrain, z, s.tanAlt)) continue;
+      lit++;
+    }
+    return Math.round((lit / sampleCount) * dayLengthHours * 10) / 10;
+  };
 
+  // The map seats each extrusion on the terrain under its own centre, so cancel that per-patch offset.
+  const terrainOffset = (x: number, y: number): number => {
+    if (!terrainSampler) return 0;
+    const [lng, lat] = frame.toLngLat(x, y);
+    const e = terrainSampler(lng, lat);
+    return e === null ? 0 : ground - e;
+  };
+
+  const toLngLatRing = (ring: Pt[]) => ring.map(([x, y]) => frame.toLngLat(x, y));
   const patches: SurfacePatch[] = [];
   let totalHours = 0;
-  let patchCount = 0;
 
-  // --- ROOF PATCHES ---
-  const roofPatches = subdivideRoof(buildingGeometry, roofPatchSize);
-  for (let r = 0; r < roofPatches.length; r++) {
-    const rp = roofPatches[r];
-    const [clng, clat] = rp.center;
-    let litSteps = 0;
-
-    for (let i = 0; i < sampleCount; i++) {
-      const ss = sunSteps[i];
-      if (ss.altRad === 0) continue;
-      const blocked = isPointShadowedByBuilding(
-        clng, clat, buildingHeight, ss.sunDirX, ss.sunDirY, ss.tanAlt, nearbyBuildings,
-        terrainSampler, groundElev,
-      );
-      if (!blocked) litSteps++;
-    }
-
-    const hours = Math.round((litSteps / sampleCount) * dayLengthHours * 10) / 10;
+  const footprintArea = Math.abs(ringArea(rings[0]));
+  const roofCellSize = clamp(Math.sqrt(footprintArea / 700), 1.5, 5);
+  subdivideRoof(rings, roofCellSize).forEach((cell, i) => {
+    const hours = litHours(cell.sample[0], cell.sample[1], ground + buildingHeight + 0.2);
+    const offset = terrainOffset(cell.sample[0], cell.sample[1]);
     totalHours += hours;
-    patchCount++;
-
     patches.push({
-      id: `roof-${r}`,
+      id: `roof-${i}`,
       type: "roof",
-      geometry: rp.geometry,
-      baseHeight: groundElev + buildingHeight,
-      topHeight: groundElev + buildingHeight + 0.5,
+      geometry: { type: "Polygon", coordinates: cell.rings.map(toLngLatRing) },
+      baseHeight: buildingHeight + offset,
+      topHeight: buildingHeight + ROOF_LIFT_M + offset,
       hours,
       color: sunlightColor(hours),
     });
-  }
+  });
 
-  // --- WALL SEGMENTS ---
-  const wallSegs = getWallSegments(buildingGeometry, buildingHeight, buildingBaseHeight, wallSegmentSize);
-  for (let w = 0; w < wallSegs.length; w++) {
-    const ws = wallSegs[w];
-    const latRad = ws.centerLat * Math.PI / 180;
-
-    const segDx = (ws.segment[1][0] - ws.segment[0][0]) * METERS_PER_DEG * Math.cos(latRad);
-    const segDy = (ws.segment[1][1] - ws.segment[0][1]) * METERS_PER_DEG;
-    const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
-
-    if (segLen < 0.5) continue;
-
-    const ux = segDx / segLen;
-    const uy = segDy / segLen;
-
-    const normalX = uy;
-    const normalY = -ux;
-
-    const wallMidHeight = (buildingBaseHeight + buildingHeight) / 2;
-    let litSteps = 0;
-
-    for (let i = 0; i < sampleCount; i++) {
-      const ss = sunSteps[i];
-      if (ss.altRad === 0) continue;
-
-      const blocked = isWallSegmentShadowed(
-        ws.centerLng, ws.centerLat, wallMidHeight,
-        normalX, normalY,
-        ss.sunDirX, ss.sunDirY, ss.altRad, ss.tanAlt,
-        nearbyBuildings,
-        terrainSampler, groundElev,
-      );
-      if (!blocked) litSteps++;
-    }
-
-    const hours = Math.round((litSteps / sampleCount) * dayLengthHours * 10) / 10;
+  const wallSpan = Math.max(1, buildingHeight - buildingBaseHeight);
+  const perimeter = rings.reduce((sum, r) => sum + r.reduce((s, p, i) => {
+    const q = r[(i + 1) % r.length];
+    return s + Math.hypot(q[0] - p[0], q[1] - p[1]);
+  }, 0), 0);
+  const segmentLength = clamp(perimeter / 160, 1.5, 6);
+  const bandHeight = clamp(wallSpan / 24, 3, 12);
+  subdivideWalls(rings, buildingBaseHeight, buildingHeight, segmentLength, bandHeight).forEach((cell, i) => {
+    const z = ground + (cell.bottom + cell.top) / 2;
+    const hours = litHours(cell.sample[0], cell.sample[1], z, cell.normal);
+    const offset = terrainOffset(cell.sample[0], cell.sample[1]);
     totalHours += hours;
-    patchCount++;
-
-    const halfLen = wallSegmentSize / 2;
-
-    const p1 = offsetPoint(ws.centerLng, ws.centerLat, -ux * halfLen, -uy * halfLen);
-    const p2 = offsetPoint(ws.centerLng, ws.centerLat, ux * halfLen, uy * halfLen);
-
-    const THICKNESS = 0.2;
-    const offsetX = (normalX * THICKNESS) / (METERS_PER_DEG * Math.cos(latRad));
-    const offsetY = (normalY * THICKNESS) / METERS_PER_DEG;
-
-    const p3 = [p2[0] - offsetX, p2[1] - offsetY];
-    const p4 = [p1[0] - offsetX, p1[1] - offsetY];
-
     patches.push({
-      id: `wall-${w}`,
+      id: `wall-${i}`,
       type: "wall",
-      geometry: { type: "Polygon", coordinates: [[p1, p2, p3, p4, p1]] },
-      baseHeight: groundElev + buildingBaseHeight,
-      topHeight: groundElev + buildingHeight,
+      geometry: { type: "Polygon", coordinates: [toLngLatRing(cell.quad)] },
+      baseHeight: Math.max(0, cell.bottom + offset),
+      topHeight: cell.top + offset,
       hours,
       color: sunlightColor(hours),
     });
-  }
+  });
 
   return {
     patches,
-    avgHours: patchCount > 0 ? Math.round((totalHours / patchCount) * 10) / 10 : 0,
+    avgHours: patches.length > 0 ? Math.round((totalHours / patches.length) * 10) / 10 : 0,
   };
 }
