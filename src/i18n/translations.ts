@@ -111,9 +111,7 @@ export type TranslationKey =
   | "threed.cancelSelection"
   | "threed.noBuildingFound"
   | "threed.transitioning"
-  | "threed.terrainActive"
   | "threed.terrainLoading"
-  | "threed.resetView"
   | "export3d.title"
   | "export3d.svgDesc"
   | "export3d.dxfDesc"
@@ -245,9 +243,7 @@ const en: Dictionary = {
   "threed.cancelSelection": "Cancel",
   "threed.noBuildingFound": "No building found, try tapping a building",
   "threed.transitioning": "Switching to 2D map...",
-  "threed.terrainActive": "Terrain",
   "threed.terrainLoading": "Loading terrain...",
-  "threed.resetView": "Reset view",
   "export3d.title": "Export 3D view",
   "export3d.svgDesc": "Isometric drawing from the south-west, with editable layers",
   "export3d.dxfDesc": "3D model in metres with terrain, for SketchUp, Rhino or AutoCAD",
@@ -381,9 +377,7 @@ const zhTW: Dictionary = {
   "threed.cancelSelection": "取消",
   "threed.noBuildingFound": "找不到建築物，請再試一次",
   "threed.transitioning": "切換至2D地圖...",
-  "threed.terrainActive": "地形",
   "threed.terrainLoading": "載入地形中...",
-  "threed.resetView": "重設視角",
   "export3d.title": "匯出3D視圖",
   "export3d.svgDesc": "從西南方的等角圖，圖層可編輯",
   "export3d.dxfDesc": "以公尺為單位並包含地形的3D模型，適用於 SketchUp、Rhino 或 AutoCAD",

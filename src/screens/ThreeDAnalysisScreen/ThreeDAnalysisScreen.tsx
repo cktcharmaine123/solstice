@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon, MountainIcon, RotateCcwIcon, DownloadIcon } from "lucide-react";
+import { ArrowLeftIcon, CalendarDaysIcon, Clock3Icon, RefreshCwIcon, XIcon, Building2Icon, DownloadIcon } from "lucide-react";
 import * as SunCalc from "suncalc";
 import lookupTimezone from "tz-lookup";
 import { Button } from "../../components/ui/button";
@@ -881,17 +881,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     setHeatmapPatches([]);
   };
 
-  const resetView = (): void => {
-    mapRef.current?.easeTo({
-      center: focusedBuilding ? [focusedBuilding.lng, focusedBuilding.lat] : center,
-      zoom: focusedBuilding ? FOCUSED_ZOOM : DEFAULT_ZOOM,
-      pitch: DEFAULT_PITCH,
-      bearing: DEFAULT_BEARING,
-      duration: 800,
-      essential: true,
-    });
-  };
-
   const exportFile: ExportFile | null = analyzing
     ? null
     : (format, skipMissing) =>
@@ -960,14 +949,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           <ArrowLeftIcon className="h-5 w-5 stroke-[2.25]" aria-hidden="true" />
         </Button>
         <div className="pointer-events-auto flex items-center gap-2">
-          {terrainEnabled && mapReady && selectionMode === "idle" && (
-            <div className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
-              <MountainIcon className="h-3.5 w-3.5 text-[#7a4a4a]" aria-hidden="true" />
-              <span className="font-['Inter'] text-[11px] font-medium text-[#7a4a4a]">
-                {t("threed.terrainActive")}
-              </span>
-            </div>
-          )}
           {terrainLoading && mapReady && (
             <div className="flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
               <RefreshCwIcon className="h-3.5 w-3.5 animate-spin text-[#7a4a4a]" aria-hidden="true" />
@@ -975,18 +956,6 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                 {t("threed.terrainLoading")}
               </span>
             </div>
-          )}
-          {mapReady && selectionMode === "idle" && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={resetView}
-              aria-label={t("threed.resetView")}
-              title={t("threed.resetView")}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 p-0 text-[#7a4a4a] shadow-sm backdrop-blur-sm transition-colors hover:bg-white md:h-12 md:w-12"
-            >
-              <RotateCcwIcon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
-            </Button>
           )}
           {mapReady && isDesktop && selectionMode === "idle" && (
             <Button
