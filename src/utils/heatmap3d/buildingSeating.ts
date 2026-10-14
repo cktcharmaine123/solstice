@@ -18,15 +18,30 @@ export type PreparedPiece = {
   group: number;
   /** Open lng/lat rings, outer first, clipped to the tile. */
   rings: Pt[][];
-  /** Heights above the building's ground, with raised pieces already lowered into the piece below. */
+  /** Heights above the building's ground. */
   base: number;
   top: number;
   onGround: boolean;
+  /** Lowest ground under this piece, so its walls can reach down to the slope. */
+  low: number;
+};
+
+type EdgeTouch = { id: string | number | undefined; line: string; pos: number };
+
+type GroupInfo = {
+  /** Area-weighted sum of the average ground under the group's ground pieces. */
+  groundSum: number;
+  area: number;
+  highest: number;
+  fallback: number;
+  minTop: number;
+  bbox: [number, number, number, number];
+  edges: EdgeTouch[];
 };
 
 export type PreparedTile = {
   pieces: PreparedPiece[];
-  groups: { lowest: number; ids: (string | number)[] }[];
+  groups: GroupInfo[];
 };
 
 type Raw = {
@@ -81,12 +96,6 @@ function find(parent: number[], i: number): number {
   return i;
 }
 
-function union(parent: number[], a: number, b: number) {
-  const ra = find(parent, a);
-  const rb = find(parent, b);
-  if (ra !== rb) parent[rb] = ra;
-}
-
 function collectPieces(tile: BuildingTile): Raw[] {
   const [w, s, e, n] = tile.bounds;
   const box: Box = { minX: w, minY: s, maxX: e, maxY: n };
@@ -128,23 +137,77 @@ function collectPieces(tile: BuildingTile): Raw[] {
 }
 
 const HASH_CELL_DEG = 0.0005;
+/** No real building complex is wider than this; stops one bad outline chaining a whole district together. */
+const MAX_GROUP_SPAN_M = 250;
+/** Halves of one outline cut at a tile edge meet within this distance (tile data is rounded per tile). */
+const EDGE_MATCH_M = 1.5;
+/** On a slope the uphill side may sink, but always keeps at least this share of the building's height visible. */
+export const MIN_VISIBLE_SHARE = 0.75;
+const SAMPLE_GRID = 4;
+
+function spanM(b: [number, number, number, number]): number {
+  const k = Math.cos((((b[1] + b[3]) / 2) * Math.PI) / 180);
+  return Math.hypot((b[2] - b[0]) * k, b[3] - b[1]) * METERS_PER_DEG;
+}
+
+function mergeBox(a: [number, number, number, number], b: [number, number, number, number]): [number, number, number, number] {
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+}
+
+/** Joins two sets unless the result would be wider than any real building. */
+function boundedUnion(parent: number[], boxes: [number, number, number, number][], a: number, b: number) {
+  const ra = find(parent, a);
+  const rb = find(parent, b);
+  if (ra === rb) return;
+  const merged = mergeBox(boxes[ra], boxes[rb]);
+  if (spanM(merged) > MAX_GROUP_SPAN_M) return;
+  parent[rb] = ra;
+  boxes[ra] = merged;
+}
+
+function groundSamples(r: Raw, ground: GroundFn): { mean: number; low: number; high: number } {
+  const values = [ground(r.centroid[0], r.centroid[1])];
+  for (const [lng, lat] of r.rings[0]) values.push(ground(lng, lat));
+  const [w, s, e, n] = r.bbox;
+  for (let i = 0; i < SAMPLE_GRID; i++) {
+    for (let j = 0; j < SAMPLE_GRID; j++) {
+      const x = w + ((i + 0.5) / SAMPLE_GRID) * (e - w);
+      const y = s + ((j + 0.5) / SAMPLE_GRID) * (n - s);
+      if (pointInPolygon(x, y, r.rings)) values.push(ground(x, y));
+    }
+  }
+  let sum = 0;
+  let low = Infinity;
+  let high = -Infinity;
+  for (const v of values) {
+    sum += v;
+    low = Math.min(low, v);
+    high = Math.max(high, v);
+  }
+  return { mean: sum / values.length, low, high };
+}
+
+function edgeTouches(r: Raw, bounds: [number, number, number, number]): EdgeTouch[] {
+  const [w, s, e, n] = bounds;
+  const eps = 1e-9;
+  const kx = METERS_PER_DEG * Math.cos((((s + n) / 2) * Math.PI) / 180);
+  const out: EdgeTouch[] = [];
+  for (const [x, y] of r.rings[0]) {
+    if (Math.abs(x - w) < eps || Math.abs(x - e) < eps) out.push({ id: r.id, line: `x${x.toFixed(6)}`, pos: y * METERS_PER_DEG });
+    if (Math.abs(y - s) < eps || Math.abs(y - n) < eps) out.push({ id: r.id, line: `y${y.toFixed(6)}`, pos: x * kx });
+  }
+  return out;
+}
 
 /**
- * Groups the pieces of each building within one map tile: pieces sharing an id, raised pieces with the
- * piece they rest on, and smaller ground pieces overlapping a larger one. Each group records the lowest
- * ground under its ground-level pieces so the whole building can be seated from one height.
+ * Groups the pieces of each building within one map tile by how they physically fit together: raised
+ * pieces with the piece they rest on, and smaller ground pieces overlapping a larger one. Shared ids are
+ * not used, because the map data stores many separate buildings of the same height under one id.
  */
 export function prepareTile(tile: BuildingTile, ground: GroundFn): PreparedTile {
   const raws = collectPieces(tile);
   const parent = raws.map((_, i) => i);
-
-  const firstById = new Map<string | number, number>();
-  raws.forEach((r, i) => {
-    if (r.id === undefined) return;
-    const first = firstById.get(r.id);
-    if (first === undefined) firstById.set(r.id, i);
-    else union(parent, first, i);
-  });
+  const boxes = raws.map((r) => [...r.bbox] as [number, number, number, number]);
 
   const hash = new Map<string, number[]>();
   raws.forEach((r, i) => {
@@ -168,72 +231,102 @@ export function prepareTile(tile: BuildingTile, ground: GroundFn): PreparedTile 
       const joins = a.onGround ? b.onGround && b.area > a.area : b.base < a.base;
       if (!joins) continue;
       if (a.base > b.top + STACK_TOLERANCE_M || b.base > a.top + STACK_TOLERANCE_M) continue;
-      if (pointInPolygon(x, y, b.rings)) union(parent, i, j);
+      if (pointInPolygon(x, y, b.rings)) boundedUnion(parent, boxes, i, j);
     }
   });
 
   const groupOf = new Map<number, number>();
-  const groups: PreparedTile["groups"] = [];
-  const fallbackLow: number[] = [];
+  const groups: GroupInfo[] = [];
   const pieces: PreparedPiece[] = raws.map((r, i) => {
     const root = find(parent, i);
     let g = groupOf.get(root);
     if (g === undefined) {
       g = groups.length;
       groupOf.set(root, g);
-      groups.push({ lowest: Infinity, ids: [] });
-      fallbackLow.push(Infinity);
+      groups.push({ groundSum: 0, area: 0, highest: -Infinity, fallback: Infinity, minTop: Infinity, bbox: [...r.bbox], edges: [] });
     }
     const group = groups[g];
-    if (r.id !== undefined && !group.ids.includes(r.id)) group.ids.push(r.id);
-    let low = ground(r.centroid[0], r.centroid[1]);
-    for (const [lng, lat] of r.rings[0]) low = Math.min(low, ground(lng, lat));
-    if (r.onGround) group.lowest = Math.min(group.lowest, low);
-    fallbackLow[g] = Math.min(fallbackLow[g], low);
-    return { group: g, rings: r.rings, base: r.base, top: r.top, onGround: r.onGround };
-  });
-  groups.forEach((g, i) => {
-    if (!Number.isFinite(g.lowest)) g.lowest = fallbackLow[i];
+    group.bbox = mergeBox(group.bbox, r.bbox);
+    group.edges.push(...edgeTouches(r, tile.bounds));
+    const { mean, low, high } = groundSamples(r, ground);
+    group.fallback = Math.min(group.fallback, mean);
+    if (r.onGround) {
+      group.groundSum += mean * r.area;
+      group.area += r.area;
+      group.highest = Math.max(group.highest, high);
+      group.minTop = Math.min(group.minTop, r.top);
+    }
+    return { group: g, rings: r.rings, base: r.base, top: r.top, onGround: r.onGround, low };
   });
   return { pieces, groups };
 }
 
-/** One ground height per building: halves cut apart at tile edges share their id and get the lower of their heights. */
+/**
+ * One ground height per building. Halves of an outline cut apart at a tile edge are rejoined where they
+ * meet along that edge. The building stands on the average ground under it, raised only as far as needed
+ * to keep most of its height visible on the uphill side.
+ */
 export function resolveGrounds(tiles: PreparedTile[]): { ground: number[]; key: number[] }[] {
   const offsets: number[] = [];
-  let total = 0;
-  for (const t of tiles) {
-    offsets.push(total);
-    total += t.groups.length;
-  }
-  const parent = Array.from({ length: total }, (_, i) => i);
-  const firstById = new Map<string | number, number>();
-  tiles.forEach((t, ti) =>
-    t.groups.forEach((g, gi) => {
-      for (const id of g.ids) {
-        const first = firstById.get(id);
-        if (first === undefined) firstById.set(id, offsets[ti] + gi);
-        else union(parent, first, offsets[ti] + gi);
+  const flat: GroupInfo[] = [];
+  const tileOf: number[] = [];
+  tiles.forEach((t, ti) => {
+    offsets.push(flat.length);
+    for (const g of t.groups) {
+      flat.push(g);
+      tileOf.push(ti);
+    }
+  });
+  const parent = flat.map((_, i) => i);
+  const boxes = flat.map((g) => [...g.bbox] as [number, number, number, number]);
+
+  const byEdge = new Map<string, number[]>();
+  flat.forEach((g, gi) => {
+    for (const touch of g.edges) {
+      const cell = Math.floor(touch.pos / EDGE_MATCH_M);
+      for (const c of [cell - 1, cell, cell + 1]) {
+        const k = `${touch.id ?? "-"}|${touch.line}|${c}`;
+        for (const other of byEdge.get(k) ?? []) {
+          if (tileOf[other] !== tileOf[gi]) boundedUnion(parent, boxes, other, gi);
+        }
       }
-    }),
-  );
-  const lowest = new Map<number, number>();
-  tiles.forEach((t, ti) =>
-    t.groups.forEach((g, gi) => {
-      const root = find(parent, offsets[ti] + gi);
-      lowest.set(root, Math.min(lowest.get(root) ?? Infinity, g.lowest));
-    }),
-  );
+      const k = `${touch.id ?? "-"}|${touch.line}|${cell}`;
+      const list = byEdge.get(k);
+      if (list) list.push(gi);
+      else byEdge.set(k, [gi]);
+    }
+  });
+
+  const merged = new Map<number, { sum: number; area: number; highest: number; fallback: number; minTop: number }>();
+  flat.forEach((g, gi) => {
+    const root = find(parent, gi);
+    const m = merged.get(root) ?? { sum: 0, area: 0, highest: -Infinity, fallback: Infinity, minTop: Infinity };
+    m.sum += g.groundSum;
+    m.area += g.area;
+    m.highest = Math.max(m.highest, g.highest);
+    m.fallback = Math.min(m.fallback, g.fallback);
+    m.minTop = Math.min(m.minTop, g.minTop);
+    merged.set(root, m);
+  });
+  const seat = new Map<number, number>();
+  for (const [root, m] of merged) {
+    if (m.area <= 0) {
+      seat.set(root, m.fallback);
+      continue;
+    }
+    const middle = m.sum / m.area;
+    seat.set(root, Math.max(middle, m.highest - (1 - MIN_VISIBLE_SHARE) * m.minTop));
+  }
   return tiles.map((t, ti) => {
     const key = t.groups.map((_, gi) => find(parent, offsets[ti] + gi));
-    return { key, ground: key.map((k) => lowest.get(k) ?? 0) };
+    return { key, ground: key.map((k) => seat.get(k) ?? 0) };
   });
 }
 
-/** Absolute bottom and top of a piece once its building is seated at `ground`. */
+/** Absolute bottom and top of a piece once its building is seated at `ground`; ground pieces reach down the slope. */
 export function seatPiece(piece: PreparedPiece, ground: number): { bottom: number; top: number } {
   return {
-    bottom: piece.onGround ? ground - BASE_EMBED_M : ground + piece.base,
+    bottom: piece.onGround ? Math.min(ground, piece.low) - BASE_EMBED_M : ground + piece.base,
     top: ground + piece.top,
   };
 }

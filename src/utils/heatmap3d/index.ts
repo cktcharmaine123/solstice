@@ -37,7 +37,7 @@ export { computeBuildingFillers } from "./fillers";
 
 export { cleanGroundHeights, cleanupMargin } from "./groundCleanup";
 
-export { BASE_EMBED_M, prepareTile, resolveGrounds, seatPiece, type PreparedTile } from "./buildingSeating";
+export { BASE_EMBED_M, MIN_VISIBLE_SHARE, prepareTile, resolveGrounds, seatPiece, type PreparedTile } from "./buildingSeating";
 
 export { createLiveBuildings, LIVE_BUILDING_LAYER, type LiveBuildings } from "./liveBuildings";
 

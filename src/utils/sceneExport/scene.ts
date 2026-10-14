@@ -2,6 +2,7 @@ import earcut from "earcut";
 import {
   allPolygonRings,
   BASE_EMBED_M,
+  MIN_VISIBLE_SHARE,
   createLocalFrame,
   findHitPolygon,
   openRing,
@@ -112,8 +113,27 @@ function mostlyInside(rings: Rings, footprint: Rings[]): boolean {
   return inside.length / samples.length >= OVERLAP_SHARE;
 }
 
-function lowestGround(rings: Rings, grid: TerrainGrid): number {
-  return Math.min(...rings[0].map(([x, y]) => gridHeight(grid, x, y)));
+function groundUnder(polygons: Rings[], grid: TerrainGrid): { mean: number; low: number; high: number } {
+  const values: number[] = [];
+  for (const rings of polygons) {
+    const [cx, cy] = ringCentroid(rings[0]);
+    values.push(gridHeight(grid, cx, cy), ...rings[0].map(([x, y]) => gridHeight(grid, x, y)));
+    const xs = rings[0].map(([x]) => x);
+    const ys = rings[0].map(([, y]) => y);
+    const [w, e, s, n] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        const x = w + ((i + 0.5) / 4) * (e - w);
+        const y = s + ((j + 0.5) / 4) * (n - s);
+        if (findHitPolygon(x, y, { type: "Polygon", coordinates: rings })) values.push(gridHeight(grid, x, y));
+      }
+    }
+  }
+  return {
+    mean: values.reduce((a, v) => a + v, 0) / values.length,
+    low: Math.min(...values),
+    high: Math.max(...values),
+  };
 }
 
 function surroundingBuildings(
@@ -157,10 +177,11 @@ function selectedBody(focused: NonNullable<FocusedBuilding>, frame: LocalFrame, 
   const box: Box = { minX: -h, minY: -h, maxX: h, maxY: h };
   const polygons = localPolygons(focused.geometry, frame, box);
   const [cx, cy] = frame.toLocal(focused.lng, focused.lat);
-  const ground = polygons.length > 0 ? Math.min(...polygons.map((rings) => lowestGround(rings, grid))) : gridHeight(grid, cx, cy);
+  const under = polygons.length > 0 ? groundUnder(polygons, grid) : null;
+  const ground = under ? Math.max(under.mean, under.high - (1 - MIN_VISIBLE_SHARE) * focused.height) : gridHeight(grid, cx, cy);
   const faces: SceneFace[] = [];
   for (const rings of polygons) {
-    const bottom = focused.baseHeight <= 0.01 ? ground - BASE_EMBED_M : ground + focused.baseHeight;
+    const bottom = focused.baseHeight <= 0.01 ? Math.min(ground, under!.low) - BASE_EMBED_M : ground + focused.baseHeight;
     // The heatmap tiles already cover the visible building; only the footing below its ground level stays solid.
     const top = hasHeatmap ? Math.min(ground, ground + focused.height) : ground + focused.height;
     if (top - bottom > 0.05) faces.push(...prismFaces(rings, bottom, top, null, h));
