@@ -6,7 +6,8 @@ import lookupTimezone from "tz-lookup";
 import { Button } from "../../components/ui/button";
 import { VectorExportDialog, type ExportFile } from "../../components/VectorExportDialog";
 import { useIsDesktop } from "../../lib/useIsDesktop";
-import { exportScene3D } from "../../utils/sceneExport";
+import { exportScene3D, SCENE_HALF_EXTENT_M } from "../../utils/sceneExport";
+import { exportAreaRing, snapExportArea } from "../../utils/exportArea";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 import {
@@ -69,6 +70,10 @@ const SUN_GROUND_DIST_M = 250;
 
 const HK_BBOX = { minLng: 113.8, maxLng: 114.5, minLat: 22.15, maxLat: 22.6 };
 const NEARBY_RADIUS_M = 400;
+const EXPORT_AREA_SOURCE = "export-area";
+const EXPORT_AREA_FILL = "export-area-fill";
+const EXPORT_AREA_LINE = "export-area-line";
+const SLOW_EXPORT_AREA_M = 400;
 // Hills this far away can still shade the selected building.
 const TERRAIN_REACH_M = 2100;
 
@@ -127,6 +132,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const [terrainEnabled, setTerrainEnabled] = useState(false);
   const [terrainLoading, setTerrainLoading] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportAreaM, setExportAreaM] = useState(() => snapExportArea(SCENE_HALF_EXTENT_M));
   const isDesktop = useIsDesktop();
 
   const rawLat = searchParams.get("lat") ?? sessionStorage.getItem("siteLat");
@@ -883,6 +889,53 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     setHeatmapPatches([]);
   };
 
+  const exportOrigin = focusedBuilding ? { lat: focusedBuilding.lat, lng: focusedBuilding.lng } : { lat: center[1], lng: center[0] };
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !exportOpen) return;
+    const data = {
+      type: "Feature" as const,
+      properties: {},
+      geometry: { type: "Polygon" as const, coordinates: [exportAreaRing(exportOrigin, exportAreaM)] },
+    };
+    try {
+      const source = map.getSource(EXPORT_AREA_SOURCE);
+      if (source) {
+        source.setData(data);
+      } else {
+        map.addSource(EXPORT_AREA_SOURCE, { type: "geojson", data });
+        map.addLayer({
+          id: EXPORT_AREA_FILL,
+          type: "fill",
+          source: EXPORT_AREA_SOURCE,
+          paint: { "fill-color": "#7a4a4a", "fill-opacity": 0.08 },
+        });
+        map.addLayer({
+          id: EXPORT_AREA_LINE,
+          type: "line",
+          source: EXPORT_AREA_SOURCE,
+          paint: { "line-color": "#7a4a4a", "line-width": 2.5, "line-dasharray": [2, 1.5] },
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to show export area:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, exportOpen, exportAreaM, exportOrigin.lat, exportOrigin.lng]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || exportOpen) return;
+    try {
+      if (map.getLayer(EXPORT_AREA_LINE)) map.removeLayer(EXPORT_AREA_LINE);
+      if (map.getLayer(EXPORT_AREA_FILL)) map.removeLayer(EXPORT_AREA_FILL);
+      if (map.getSource(EXPORT_AREA_SOURCE)) map.removeSource(EXPORT_AREA_SOURCE);
+    } catch (e) {
+      console.warn("Failed to hide export area:", e);
+    }
+  }, [mapReady, exportOpen]);
+
   const exportFile: ExportFile | null = analyzing
     ? null
     : (format, skipMissing) =>
@@ -890,12 +943,13 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           {
             title: siteTitle,
             dateLabel: formatShortDate(selectedDate),
-            origin: focusedBuilding ? { lat: focusedBuilding.lat, lng: focusedBuilding.lng } : { lat: center[1], lng: center[0] },
+            origin: exportOrigin,
             focused: focusedBuilding,
             patches: heatmapPatches,
           },
           format,
           skipMissing,
+          exportAreaM,
         );
 
   return (
@@ -1170,6 +1224,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           objDescription={t("export3d.objDesc")}
           unavailableMessage={t("export3d.waitForAnalysis")}
           notice={focusedBuilding ? undefined : t("export3d.noHeatmap")}
+          area={{ valueM: exportAreaM, onChange: setExportAreaM, slowAboveM: SLOW_EXPORT_AREA_M }}
         />
       )}
     </main>

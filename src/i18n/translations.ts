@@ -123,6 +123,14 @@ export type TranslationKey =
   | "export3d.withoutMap"
   | "export3d.terrainFailed"
   | "export3d.flatGround"
+  | "exportArea.title"
+  | "exportArea.label"
+  | "exportArea.covers"
+  | "exportArea.hint"
+  | "exportArea.summary"
+  | "exportArea.slow"
+  | "exportArea.continue"
+  | "exportArea.back"
   | "settings.title"
   | "settings.language"
   | "settings.privacyPolicy"
@@ -257,6 +265,14 @@ const en: Dictionary = {
   "export3d.withoutMap": "Export building only",
   "export3d.terrainFailed": "The ground heights couldn't be loaded. You can export with flat ground instead.",
   "export3d.flatGround": "Use flat ground",
+  "exportArea.title": "Choose export area",
+  "exportArea.label": "Area around the point",
+  "exportArea.covers": "Covers {size} m by {size} m",
+  "exportArea.hint": "The square on the map shows what will be included.",
+  "exportArea.summary": "Area: {size} m by {size} m",
+  "exportArea.slow": "Large areas may take a little longer to export.",
+  "exportArea.continue": "Continue",
+  "exportArea.back": "Change area",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -393,6 +409,14 @@ const zhTW: Dictionary = {
   "export3d.withoutMap": "只匯出建築物",
   "export3d.terrainFailed": "無法載入地面高度。您可以改用平坦地面匯出。",
   "export3d.flatGround": "使用平坦地面",
+  "exportArea.title": "選擇匯出範圍",
+  "exportArea.label": "選定點周邊範圍",
+  "exportArea.covers": "涵蓋 {size} 公尺 × {size} 公尺",
+  "exportArea.hint": "地圖上的方框顯示將會匯出的範圍。",
+  "exportArea.summary": "範圍：{size} 公尺 × {size} 公尺",
+  "exportArea.slow": "範圍較大時，匯出可能需要較長時間。",
+  "exportArea.continue": "繼續",
+  "exportArea.back": "更改範圍",
 
   "settings.title": "設定",
   "settings.language": "語言",

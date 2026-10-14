@@ -224,8 +224,12 @@ function heatmapFaces(patches: SurfacePatch[], frame: LocalFrame, ground: number
   return out;
 }
 
-export function buildScene3D(input: Scene3DInput, tiles: MapTile[], sampler: TerrainSampler | null): Scene3D {
-  const h = SCENE_HALF_EXTENT_M;
+export function buildScene3D(
+  input: Scene3DInput,
+  tiles: MapTile[],
+  sampler: TerrainSampler | null,
+  h: number = SCENE_HALF_EXTENT_M,
+): Scene3D {
   const { origin, focused } = input;
   const frame = createLocalFrame(origin.lng, origin.lat);
   const fallbackElevation = sampler?.(origin.lng, origin.lat) ?? 0;

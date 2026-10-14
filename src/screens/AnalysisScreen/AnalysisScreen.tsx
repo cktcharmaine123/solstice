@@ -32,6 +32,7 @@ import { supabase } from "../../lib/supabase";
 import { formatGraphName, saveGraph } from "../../utils/savedGraphs";
 import { createDiagramSpec, exportDiagram, type DiagramPath } from "../../utils/vectorExport";
 import { VectorExportDialog } from "../../components/VectorExportDialog";
+import { exportAreaRing, snapExportArea } from "../../utils/exportArea";
 import { useIsDesktop } from "../../lib/useIsDesktop";
 import { peekPendingAnalysisState, setPendingAnalysisState, setPendingRevert } from "../../utils/revertStore";
 import lookupTimezone from "tz-lookup";
@@ -523,6 +524,7 @@ function AnalysisScreenContent(): JSX.Element {
   const [isCapturing, setIsCapturing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [chosenExportAreaM, setChosenExportAreaM] = useState<number | null>(null);
   const isDesktop = useIsDesktop();
   const chipsRowRef = useRef<HTMLDivElement | null>(null);
   const mapSectionRef = useRef<HTMLElement | null>(null);
@@ -703,6 +705,8 @@ function AnalysisScreenContent(): JSX.Element {
     overlayPaths,
     locationLabel,
   ]);
+
+  const exportAreaM = chosenExportAreaM ?? (diagramSpec ? snapExportArea(diagramSpec.halfExtentM) : null);
 
   const overlayIcons = useMemo(() => {
     const icons: Record<string, L.DivIcon> = {};
@@ -1161,6 +1165,13 @@ function AnalysisScreenContent(): JSX.Element {
                   }}
                 />
               )}
+              {exportOpen && exportAreaM !== null && center && (
+                <Polygon
+                  positions={exportAreaRing(center, exportAreaM).map(([lng, lat]) => [lat, lng] as [number, number])}
+                  interactive={false}
+                  pathOptions={{ color: "#7a4a4a", weight: 2.5, dashArray: "8 6", fillColor: "#7a4a4a", fillOpacity: 0.06 }}
+                />
+              )}
               {primaryPathVisible && sunMarkerPos && (
                 <Marker position={sunMarkerPos} icon={markerIcon} />
               )}
@@ -1465,8 +1476,13 @@ function AnalysisScreenContent(): JSX.Element {
         <VectorExportDialog
           open={exportOpen}
           onClose={() => setExportOpen(false)}
-          exportFile={diagramSpec ? (format, skipMissing) => exportDiagram(diagramSpec, format, skipMissing) : null}
+          exportFile={
+            diagramSpec && exportAreaM !== null
+              ? (format, skipMissing) => exportDiagram({ ...diagramSpec, halfExtentM: exportAreaM }, format, skipMissing)
+              : null
+          }
           fileBaseName={`${locationLabel} ${formatShortDate(selectedDate)}`}
+          area={exportAreaM !== null ? { valueM: exportAreaM, onChange: setChosenExportAreaM } : undefined}
         />
       )}
     </main>

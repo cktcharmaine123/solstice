@@ -291,3 +291,40 @@
     transform: translateY(calc(-100% - var(--gap)));
   }
 }
+.export-area-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.export-area-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #7a4a4a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms ease;
+}
+
+.export-area-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #7a4a4a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.export-area-slider:hover::-webkit-slider-thumb,
+.export-area-slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.export-area-slider:focus-visible {
+  box-shadow: 0 0 0 3px rgba(122, 74, 74, 0.25);
+}
