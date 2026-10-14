@@ -51,6 +51,10 @@ declare global {
 const DEFAULT_CENTER: [number, number] = [114.16, 22.28];
 const DEFAULT_ZOOM = 16;
 const DEFAULT_PITCH = 60;
+const MIN_ZOOM = 15.5;
+const MAX_ZOOM = 19;
+const MAX_PITCH = 65;
+const AREA_RADIUS_M = 300;
 const SUN_GROUND_DIST_M = 250;
 
 const HK_BBOX = { minLng: 113.8, maxLng: 114.5, minLat: 22.15, maxLat: 22.6 };
@@ -189,7 +193,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       });
       map.easeTo({
         pitch: 0,
-        zoom: Math.max(14, map.getZoom() - 1),
+        zoom: Math.max(MIN_ZOOM, map.getZoom() - 1),
         duration: 800,
         essential: true,
       });
@@ -255,11 +259,46 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           style: "https://tiles.openfreemap.org/styles/liberty",
           center: center,
           zoom: DEFAULT_ZOOM,
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
           pitch: DEFAULT_PITCH,
+          maxPitch: MAX_PITCH,
           bearing: 0,
           attributionControl: false,
-          antialias: true
+          antialias: true,
+          dragPan: false,
+          keyboard: false,
+          boxZoom: false,
+          scrollZoom: { around: 'center' },
+          touchZoomRotate: { around: 'center' },
+          doubleClickZoom: false,
         });
+
+        const distanceFromCenterM = (lng: number, lat: number) => {
+          const dx = (lng - center[0]) * METERS_PER_DEG * Math.cos((center[1] * Math.PI) / 180);
+          const dy = (lat - center[1]) * METERS_PER_DEG;
+          return Math.hypot(dx, dy);
+        };
+
+        let areaBuildingCount = -1;
+        const refreshAreaBuildings = () => {
+          const areaSource = map.getSource('area-buildings');
+          if (!areaSource || !map.getSource('openmaptiles')) return;
+          const raw = map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' });
+          const seen = new Set<string>();
+          const features: any[] = [];
+          for (const f of raw) {
+            const c = buildingCentroid(f.geometry);
+            if (!c || distanceFromCenterM(c[0], c[1]) > AREA_RADIUS_M) continue;
+            const key = `${f.id ?? ''}_${c[0].toFixed(7)}_${c[1].toFixed(7)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            features.push({ type: 'Feature', id: f.id, geometry: f.geometry, properties: f.properties });
+          }
+          if (features.length === areaBuildingCount) return;
+          areaBuildingCount = features.length;
+          areaSource.setData({ type: 'FeatureCollection', features });
+        };
 
         const APP_LAYER_IDS = new Set(['3d-buildings', 'building-shadows', 'building-selection']);
         const isAppLayer = (id: string) =>
@@ -314,12 +353,19 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         const ensureAppLayers = () => {
           if (!map.getSource('openmaptiles')) return;
 
+          if (!map.getSource('area-buildings')) {
+            map.addSource('area-buildings', {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] },
+            });
+            areaBuildingCount = -1;
+          }
+
           if (!map.getLayer('building-shadows')) {
             try {
               map.addLayer({
                 'id': 'building-shadows',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
+                'source': 'area-buildings',
                 'type': 'fill',
                 'minzoom': 14,
                 'paint': {
@@ -339,8 +385,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             try {
               map.addLayer({
                 'id': 'building-selection',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
+                'source': 'area-buildings',
                 'type': 'fill',
                 'minzoom': 14,
                 'paint': {
@@ -357,8 +402,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             try {
               map.addLayer({
                 'id': '3d-buildings',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
+                'source': 'area-buildings',
                 'type': 'fill-extrusion',
                 'minzoom': 14,
                 'paint': {
@@ -381,6 +425,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           try {
             applyMonochrome();
             ensureAppLayers();
+            refreshAreaBuildings();
           } catch (e) {
             console.error("Error modifying style:", e);
           } finally {
@@ -409,6 +454,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           if (cancelled) return;
           window.clearTimeout(timeoutId);
           setupStyle();
+          refreshAreaBuildings();
           setDebugInfo("Map loaded successfully!");
           setMapReady(true);
           mapRef.current = map;
@@ -441,6 +487,16 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           }
 
           map.on("move", () => setViewVersion((v) => v + 1));
+
+          let buildingTilesChanged = true;
+          map.on("sourcedata", (e: any) => {
+            if (e.sourceId === 'openmaptiles' && e.tile) buildingTilesChanged = true;
+          });
+          map.on("idle", () => {
+            if (!buildingTilesChanged || cancelled) return;
+            buildingTilesChanged = false;
+            refreshAreaBuildings();
+          });
 
          map.on("click", (e: any) => {
   if (selectionModeRef.current !== "selecting") return;
