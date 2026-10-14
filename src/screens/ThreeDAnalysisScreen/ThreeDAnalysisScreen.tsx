@@ -601,38 +601,46 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
     if (!sunPosition || !sunVisible || !hasCoords || !map) return;
 
-    const zoom = map.getZoom();
-    const pitchRad = map.getPitch() * Math.PI / 180;
     const focusLat = focusedBuilding ? focusedBuilding.lat : lat;
     const focusLng = focusedBuilding ? focusedBuilding.lng : lng;
     const focusLatRad = focusLat * Math.PI / 180;
-    const pixelsPerMeter = Math.pow(2, zoom) / (156543.03392 * Math.cos(focusLatRad));
 
     const siteScreen = map.project([focusLng, focusLat]);
     const siteX = siteScreen.x;
     const siteY = siteScreen.y;
 
-    const sunScreenPos = (altDeg: number, azDeg: number): { x: number; y: number } => {
+    const mapContainer = map.getContainer();
+    const viewWidth = mapContainer.clientWidth;
+    const viewHeight = mapContainer.clientHeight;
+    const worldToClip = map.transform.customLayerMatrix();
+    const MercatorCoordinate = window.maplibregl.MercatorCoordinate;
+    const siteElevation = map.terrain
+      ? (map.queryTerrainElevation([focusLng, focusLat]) ?? 0) + (map.transform.elevation ?? 0)
+      : 0;
+
+    // The sun sits on a dome of fixed radius over the site, projected with the real camera.
+    const sunScreenPos = (altDeg: number, azDeg: number): { x: number; y: number } | null => {
       const azRad = azDeg * Math.PI / 180;
       const altRad = altDeg * Math.PI / 180;
+      const horizontal = SUN_GROUND_DIST_M * Math.cos(altRad);
+      const pointLat = focusLat + (horizontal * Math.cos(azRad)) / METERS_PER_DEG;
+      const pointLng = focusLng + (horizontal * Math.sin(azRad)) / (METERS_PER_DEG * Math.cos(focusLatRad));
+      const altitude = siteElevation + SUN_GROUND_DIST_M * Math.sin(altRad);
 
-      const dxMeters = SUN_GROUND_DIST_M * Math.sin(azRad);
-      const dyMeters = SUN_GROUND_DIST_M * Math.cos(azRad);
-      const groundLat = focusLat + dyMeters / METERS_PER_DEG;
-      const groundLng = focusLng + dxMeters / (METERS_PER_DEG * Math.cos(focusLatRad));
-
-      const groundScreen = map.project([groundLng, groundLat]);
-
-      const heightMeters = SUN_GROUND_DIST_M * Math.tan(altRad);
-      const heightPixels = heightMeters * pixelsPerMeter * Math.sin(pitchRad);
-
+      const mc = MercatorCoordinate.fromLngLat([pointLng, pointLat], altitude);
+      const m = worldToClip;
+      const cx = m[0] * mc.x + m[4] * mc.y + m[8] * mc.z + m[12];
+      const cy = m[1] * mc.x + m[5] * mc.y + m[9] * mc.z + m[13];
+      const cw = m[3] * mc.x + m[7] * mc.y + m[11] * mc.z + m[15];
+      if (cw <= 0) return null;
       return {
-        x: groundScreen.x,
-        y: groundScreen.y - heightPixels,
+        x: ((cx / cw + 1) / 2) * viewWidth,
+        y: ((1 - cy / cw) / 2) * viewHeight,
       };
     };
 
     const sunPos = sunScreenPos(sunPosition.altitude, sunPosition.azimuth);
+    if (!sunPos) return;
     const sunX = sunPos.x;
     const sunY = sunPos.y;
 
@@ -652,6 +660,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
         if (stepPos.altitude > 0) {
           const stepScreen = sunScreenPos(stepPos.altitude, stepPos.azimuth);
+          if (!stepScreen) {
+            isFirstPoint = true;
+            continue;
+          }
 
           if (isFirstPoint) {
             ctx.moveTo(stepScreen.x, stepScreen.y);
