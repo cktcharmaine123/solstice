@@ -27,6 +27,9 @@ import { toPng } from "html-to-image";
 import domToImage from "dom-to-image-more";
 import { supabase } from "../../lib/supabase";
 import { formatGraphName, saveGraph } from "../../utils/savedGraphs";
+import { createDiagramSpec, type DiagramPath } from "../../utils/vectorExport";
+import { VectorExportDialog } from "../../components/VectorExportDialog";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 import { peekPendingAnalysisState, setPendingAnalysisState, setPendingRevert } from "../../utils/revertStore";
 import lookupTimezone from "tz-lookup";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -516,6 +519,8 @@ function AnalysisScreenContent(): JSX.Element {
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const isDesktop = useIsDesktop();
   const chipsRowRef = useRef<HTMLDivElement | null>(null);
   const mapSectionRef = useRef<HTMLElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -650,6 +655,52 @@ function AnalysisScreenContent(): JSX.Element {
     });
   }, [sunPaths, center, coordsReady]);
 
+  const diagramSpec = useMemo(() => {
+    if (!coordsReady || !center) return null;
+    const paths: DiagramPath[] = [];
+    if (primaryPathVisible && pathPoints.length > 0) {
+      paths.push({
+        label: formatShortDate(selectedDate),
+        dateLabel: formatShortDate(selectedDate),
+        timeLabel: formatClock(selectedDateTime, locationTimeZone),
+        color: primaryColor,
+        dashed: false,
+        points: pathPoints,
+        marker: sunMarkerPos,
+        cone: sunConePolygon,
+      });
+    }
+    overlaySunData.forEach((data, i) => {
+      const points = overlayPaths[i]?.points ?? [];
+      if (!data.overlay.visible || points.length === 0) return;
+      paths.push({
+        label: data.overlay.label,
+        dateLabel: formatShortDate(data.overlay.date),
+        timeLabel: formatClock(data.currentTime, locationTimeZone),
+        color: data.overlay.color,
+        dashed: true,
+        points,
+        marker: data.sunMarkerPos,
+        cone: data.sunConePolygon,
+      });
+    });
+    return createDiagramSpec(locationLabel, center, paths);
+  }, [
+    coordsReady,
+    center,
+    primaryPathVisible,
+    pathPoints,
+    selectedDate,
+    selectedDateTime,
+    locationTimeZone,
+    primaryColor,
+    sunMarkerPos,
+    sunConePolygon,
+    overlaySunData,
+    overlayPaths,
+    locationLabel,
+  ]);
+
   const overlayIcons = useMemo(() => {
     const icons: Record<string, L.DivIcon> = {};
     for (const p of sunPaths) {
@@ -775,6 +826,7 @@ function AnalysisScreenContent(): JSX.Element {
         imageData,
         locationLabel,
         dateLabel: formatShortDate(selectedDate),
+        ...(diagramSpec ? { diagram: diagramSpec } : {}),
       });
       setPendingAnalysisState({
         sunPaths,
@@ -935,6 +987,17 @@ function AnalysisScreenContent(): JSX.Element {
           >
             {t("analysis.saveGraph")}
           </Button>
+          {isDesktop && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setExportOpen(true)}
+              disabled={!coordsReady || !diagramSpec || isCapturing}
+              className="min-h-12 shrink-0 rounded-[20px] bg-[#f6f6f6] px-4 py-3 [font-family:'Adamina',Helvetica] text-sm font-normal leading-[19.6px] text-[#7a4a4a] hover:bg-[#eeeeee] disabled:opacity-60"
+            >
+              {t("export.button")}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -1393,6 +1456,14 @@ function AnalysisScreenContent(): JSX.Element {
             </div>
           </div>
         </div>
+      )}
+      {isDesktop && (
+        <VectorExportDialog
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          diagram={diagramSpec}
+          fileBaseName={`${locationLabel} ${formatShortDate(selectedDate)}`}
+        />
       )}
     </main>
   );

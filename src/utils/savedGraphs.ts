@@ -1,3 +1,5 @@
+import type { DiagramSpec } from "./vectorExport";
+
 export type SavedGraph = {
   id: string;
   name: string;
@@ -5,6 +7,7 @@ export type SavedGraph = {
   imageData: string;
   locationLabel: string;
   dateLabel: string;
+  diagram?: DiagramSpec;
 };
 
 const STORAGE_KEY = "sun-path-saved-graphs";

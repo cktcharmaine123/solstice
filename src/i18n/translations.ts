@@ -42,6 +42,19 @@ export type TranslationKey =
   | "graphDetail.backToGraphs"
   | "graphDetail.download"
   | "graphDetail.notAvailable"
+  | "export.button"
+  | "export.title"
+  | "export.png"
+  | "export.pngDesc"
+  | "export.svg"
+  | "export.svgDesc"
+  | "export.dxf"
+  | "export.dxfDesc"
+  | "export.preparing"
+  | "export.failed"
+  | "export.mapFailed"
+  | "export.withoutMap"
+  | "export.unavailable"
   | "analysis.goBack"
   | "analysis.searchLocation"
   | "analysis.findingLocation"
@@ -151,6 +164,19 @@ const en: Dictionary = {
   "graphDetail.backToGraphs": "Back to saved graphs",
   "graphDetail.download": "Download saved graph",
   "graphDetail.notAvailable": "This saved graph is no longer available.",
+  "export.button": "Export",
+  "export.title": "Export diagram",
+  "export.png": "Image (PNG)",
+  "export.pngDesc": "The saved picture, exactly as shown",
+  "export.svg": "Vector drawing (SVG)",
+  "export.svgDesc": "Editable layers for Illustrator, Figma or Inkscape",
+  "export.dxf": "CAD drawing (DXF)",
+  "export.dxfDesc": "Real scale in metres, north up, site at the origin",
+  "export.preparing": "Preparing export...",
+  "export.failed": "The export could not be created. Please try again.",
+  "export.mapFailed": "The street map could not be loaded. You can still export the sun paths on their own.",
+  "export.withoutMap": "Export lines only",
+  "export.unavailable": "Vector export is only available for graphs saved after this feature was added.",
 
   "analysis.goBack": "Go Back",
   "analysis.searchLocation": "Search for a location",
@@ -264,6 +290,19 @@ const zhTW: Dictionary = {
   "graphDetail.backToGraphs": "返回已儲存圖表",
   "graphDetail.download": "下載已儲存圖表",
   "graphDetail.notAvailable": "此已儲存圖表已無法使用。",
+  "export.button": "匯出",
+  "export.title": "匯出圖表",
+  "export.png": "圖片（PNG）",
+  "export.pngDesc": "已儲存的圖片，與畫面相同",
+  "export.svg": "向量圖（SVG）",
+  "export.svgDesc": "可在 Illustrator、Figma 或 Inkscape 中編輯的圖層",
+  "export.dxf": "CAD 圖（DXF）",
+  "export.dxfDesc": "以公尺為實際比例，北方朝上，基地位於原點",
+  "export.preparing": "正在準備匯出...",
+  "export.failed": "無法建立匯出檔案，請再試一次。",
+  "export.mapFailed": "無法載入街道地圖。您仍可只匯出太陽軌跡。",
+  "export.withoutMap": "只匯出線條",
+  "export.unavailable": "只有在此功能推出後儲存的圖表才能匯出向量檔。",
 
   "analysis.goBack": "返回",
   "analysis.searchLocation": "搜尋位置",

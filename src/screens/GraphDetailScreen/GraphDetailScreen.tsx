@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { getSavedGraphs, type SavedGraph } from "../../utils/savedGraphs";
+import { isDiagramSpec } from "../../utils/vectorExport";
+import { VectorExportDialog } from "../../components/VectorExportDialog";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 
@@ -18,6 +21,8 @@ export const GraphDetailScreen = (): JSX.Element => {
   const { t } = useLanguage();
   const { graphId } = useParams<{ graphId: string }>();
   const [graph, setGraph] = useState<SavedGraph | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     setGraph(getSavedGraphs().find((savedGraph) => savedGraph.id === graphId) ?? null);
@@ -73,7 +78,7 @@ export const GraphDetailScreen = (): JSX.Element => {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => void downloadGraph()}
+          onClick={() => (isDesktop ? setExportOpen(true) : void downloadGraph())}
           aria-label={t("graphDetail.download")}
           disabled={!graph}
           className="h-12 w-12 rounded-full p-0 text-black hover:bg-neutral-100"
@@ -108,6 +113,15 @@ export const GraphDetailScreen = (): JSX.Element => {
         </div>
         <div className="h-[34px]" />
       </nav>
+      {isDesktop && graph && (
+        <VectorExportDialog
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          diagram={isDiagramSpec(graph.diagram) ? graph.diagram : null}
+          fileBaseName={graph.name}
+          onDownloadPng={() => void downloadGraph()}
+        />
+      )}
     </main>
   );
 };
