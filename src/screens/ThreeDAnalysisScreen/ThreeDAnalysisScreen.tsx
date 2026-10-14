@@ -14,6 +14,9 @@ import {
   partHeights,
   BUILDING_HEIGHT_EXPR,
   DISPLAY_BASE_EXPR,
+  FILLER_LAYER,
+  addBuildingFillerLayer,
+  watchBuildingFillers,
   RENDERABLE_BUILDING_FILTER,
   queryNearbyBuildings,
   renderHeatmapLayers,
@@ -278,7 +281,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           doubleClickZoom: false,
         });
 
-        const APP_LAYER_IDS = new Set(['3d-buildings', 'building-shadows', 'building-selection']);
+        const APP_LAYER_IDS = new Set(['3d-buildings', 'building-shadows', 'building-selection', FILLER_LAYER]);
         const isAppLayer = (id: string) =>
           APP_LAYER_IDS.has(id) ||
           id.startsWith('heatmap-3d') ||
@@ -392,6 +395,12 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               console.warn("Failed to add 3D buildings:", e);
             }
           }
+
+          try {
+            addBuildingFillerLayer(map, '#d4d4d4');
+          } catch (e) {
+            console.warn("Failed to add building fillers:", e);
+          }
         };
 
         let settingUp = false;
@@ -409,7 +418,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         };
 
         const appLayersMissing = () =>
-          !map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection');
+          !map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection') || !map.getLayer(FILLER_LAYER);
 
         map.on("style.load", setupStyle);
 
@@ -429,6 +438,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           if (cancelled) return;
           window.clearTimeout(timeoutId);
           setupStyle();
+          watchBuildingFillers(map, 'openmaptiles');
           setDebugInfo("Map loaded successfully!");
           setMapReady(true);
           mapRef.current = map;

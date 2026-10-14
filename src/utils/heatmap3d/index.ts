@@ -27,6 +27,8 @@ export { deduplicateFeatures, collectBuildingParts, type SelectedBuilding } from
 
 export { partHeights, BUILDING_HEIGHT_EXPR, DISPLAY_BASE_EXPR, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
 
+export { FILLER_LAYER, addBuildingFillerLayer, watchBuildingFillers } from "./fillers";
+
 export { queryNearbyBuildings } from "./mapQueries";
 
 export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./mapLayers";

@@ -2,7 +2,7 @@ import { AVG_BUILDING_HEIGHT_M } from "./types";
 
 const MIN_PART_THICKNESS_M = 0.5;
 // Each piece is seated on the terrain under its own centre, so stacked pieces on a slope drift apart vertically.
-const RAISED_PART_OVERLAP_M = 4;
+export const RAISED_PART_OVERLAP_M = 4;
 
 export function partHeights(props: any): { height: number; base: number } {
   const p = props || {};
