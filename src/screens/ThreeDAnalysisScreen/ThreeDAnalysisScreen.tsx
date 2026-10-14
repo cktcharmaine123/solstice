@@ -261,173 +261,141 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           antialias: true
         });
 
-        const setupStyle = () => {
-          if (cancelled) return;
+        const APP_LAYER_IDS = new Set(['3d-buildings', 'building-shadows', 'building-selection']);
+        const isAppLayer = (id: string) =>
+          APP_LAYER_IDS.has(id) ||
+          id.startsWith('heatmap-3d') ||
+          id.startsWith('focused-building') ||
+          id.startsWith('hover-building');
 
-          try {
-            {
-              setDebugInfo("Style loaded, applying monochrome filter...");
+        const trySet = (layerId: string, prop: string, value: any) => {
+          try { map.setPaintProperty(layerId, prop, value); } catch (e) { /* property not supported on this layer */ }
+        };
 
-              const layers = map.getStyle().layers;
+        const applyMonochrome = () => {
+          const layers: any[] = map.getStyle()?.layers ?? [];
 
-              // Remove ALL symbol layers (labels, POIs, road shields, arrows, etc.)
-              const layersToRemove = layers
-                .filter((layer: any) => layer.type === 'symbol')
-                .map((layer: any) => layer.id);
+          layers
+            .filter((layer) => !isAppLayer(layer.id) && (layer.type === 'symbol' || layer.type === 'fill-extrusion'))
+            .forEach((layer) => {
+              try { map.removeLayer(layer.id); } catch (e) { /* already removed */ }
+            });
 
-              layersToRemove.forEach((layerId: string) => {
-                try {
-                  if (map.getLayer(layerId)) {
-                    map.removeLayer(layerId);
-                  }
-                } catch (e) {
-                  console.warn(`Could not remove layer ${layerId}:`, e);
+          (map.getStyle()?.layers ?? []).forEach((layer: any) => {
+            if (isAppLayer(layer.id)) return;
+            const sourceLayer = layer['source-layer'] || '';
+            const isWater = sourceLayer === 'water' || sourceLayer === 'waterway';
+
+            switch (layer.type) {
+              case 'background':
+                trySet(layer.id, 'background-color', '#f2f2f2');
+                break;
+              case 'raster':
+                trySet(layer.id, 'raster-saturation', -1);
+                break;
+              case 'hillshade':
+                trySet(layer.id, 'hillshade-shadow-color', '#9a9a9a');
+                trySet(layer.id, 'hillshade-highlight-color', '#d0d0d0');
+                trySet(layer.id, 'hillshade-accent-color', '#ababab');
+                break;
+              case 'fill':
+                if (layer.paint?.['fill-pattern']) trySet(layer.id, 'fill-pattern', null);
+                trySet(layer.id, 'fill-color', isWater ? '#c4c4c4' : sourceLayer === 'building' ? '#d6d6d6' : '#e6e6e6');
+                trySet(layer.id, 'fill-outline-color', isWater ? '#b4b4b4' : '#d0d0d0');
+                break;
+              case 'line':
+                if (layer.paint?.['line-pattern']) trySet(layer.id, 'line-pattern', null);
+                trySet(layer.id, 'line-color', isWater ? '#b4b4b4' : '#a6a6a6');
+                break;
+            }
+          });
+        };
+
+        const ensureAppLayers = () => {
+          if (!map.getSource('openmaptiles')) return;
+
+          if (!map.getLayer('building-shadows')) {
+            try {
+              map.addLayer({
+                'id': 'building-shadows',
+                'source': 'openmaptiles',
+                'source-layer': 'building',
+                'type': 'fill',
+                'minzoom': 14,
+                'paint': {
+                  'fill-color': '#1a1a2e',
+                  'fill-opacity': 0,
+                  'fill-translate': [0, 0],
+                  'fill-translate-anchor': 'map'
                 }
               });
+            } catch (e) {
+              console.warn("Failed to add building shadows:", e);
+            }
+          }
 
-              const remainingLayers = map.getStyle().layers;
-
-              remainingLayers.forEach((layer: any) => {
-                try {
-                  if (layer.type === 'background') {
-                    map.setPaintProperty(layer.id, 'background-color', '#f0f0f0');
-                    return;
-                  }
-
-                  if (layer.type === 'raster') {
-                    try { map.setPaintProperty(layer.id, 'raster-saturation', -1); } catch (e) { /* not all raster layers support it */ }
-                    return;
-                  }
-
-                  if (layer.type === 'hillshade') {
-                    try { map.setPaintProperty(layer.id, 'hillshade-shadow-color', '#999999'); } catch (e) { /* ignore */ }
-                    try { map.setPaintProperty(layer.id, 'hillshade-highlight-color', '#cccccc'); } catch (e) { /* ignore */ }
-                    try { map.setPaintProperty(layer.id, 'hillshade-accent-color', '#aaaaaa'); } catch (e) { /* ignore */ }
-                    return;
-                  }
-
-                  if (layer.type === 'fill-extrusion') {
-                    const paint = layer.paint || {};
-                    if (paint['fill-extrusion-color']) {
-                      map.setPaintProperty(layer.id, 'fill-extrusion-color', '#d4d4d4');
-                    }
-                    return;
-                  }
-
-                  if (layer.type === 'fill') {
-                    const paint = layer.paint || {};
-                    // Clear any fill-pattern (e.g. wetland, pedestrian polygon) and replace with grey
-                    if (paint['fill-pattern']) {
-                      try { map.setPaintProperty(layer.id, 'fill-pattern', null); } catch (e) { /* ignore */ }
-                    }
-                    try { map.setPaintProperty(layer.id, 'fill-color', '#e0e0e0'); } catch (e) { /* ignore */ }
-                    try { map.setPaintProperty(layer.id, 'fill-outline-color', '#cccccc'); } catch (e) { /* ignore */ }
-                    return;
-                  }
-
-                  if (layer.type === 'line') {
-                    const paint = layer.paint || {};
-                    if (paint['line-color']) {
-                      try { map.setPaintProperty(layer.id, 'line-color', '#666666'); } catch (e) { /* ignore */ }
-                    }
-                    return;
-                  }
-
-                } catch (e) {
-                  console.warn(`Could not modify layer ${layer.id}:`, e);
+          // Flat, invisible footprint layer used for tap hit-testing; extrusions are unreliable to query with terrain.
+          if (!map.getLayer('building-selection')) {
+            try {
+              map.addLayer({
+                'id': 'building-selection',
+                'source': 'openmaptiles',
+                'source-layer': 'building',
+                'type': 'fill',
+                'minzoom': 14,
+                'paint': {
+                  'fill-color': '#000000',
+                  'fill-opacity': 0,
                 }
               });
-
-              setDebugInfo("Applied monochrome colors to base map");
+            } catch (e) {
+              console.warn("Failed to add building selection layer:", e);
             }
+          }
 
-            // Add 3D buildings layer (re-add if removed by terrain style reload)
-            if (!map.getLayer('3d-buildings')) {
-              try {
-                map.addLayer({
-                  'id': '3d-buildings',
-                  'source': 'openmaptiles',
-                  'source-layer': 'building',
-                  'type': 'fill-extrusion',
-                  'minzoom': 14,
-                  'paint': {
-                    'fill-extrusion-color': '#d4d4d4',
-                    'fill-extrusion-height': [
-                      'coalesce',
-                      ['get', 'render_height'],
-                      ['get', 'height'],
-                      10
-                    ],
-                    'fill-extrusion-base': [
-                      'coalesce',
-                      ['get', 'render_min_height'],
-                      ['get', 'min_height'],
-                      0
-                    ],
-                    'fill-extrusion-opacity': 0.85
-                  }
-                });
-              } catch (e) {
-                console.warn("Failed to add 3D buildings:", e);
-              }
+          if (!map.getLayer('3d-buildings')) {
+            try {
+              map.addLayer({
+                'id': '3d-buildings',
+                'source': 'openmaptiles',
+                'source-layer': 'building',
+                'type': 'fill-extrusion',
+                'minzoom': 14,
+                'paint': {
+                  'fill-extrusion-color': '#d4d4d4',
+                  'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
+                  'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+                  'fill-extrusion-opacity': 0.85
+                }
+              });
+            } catch (e) {
+              console.warn("Failed to add 3D buildings:", e);
             }
-
-            // Add building shadows layer (re-add if removed by terrain style reload)
-            if (!map.getLayer('building-shadows')) {
-              try {
-                map.addLayer({
-                  'id': 'building-shadows',
-                  'source': 'openmaptiles',
-                  'source-layer': 'building',
-                  'type': 'fill',
-                  'minzoom': 14,
-                  'paint': {
-                    'fill-color': '#1a1a2e',
-                    'fill-opacity': 0,
-                    'fill-translate': [0, 0],
-                    'fill-translate-anchor': 'map'
-                  }
-                });
-              } catch (e) {
-                console.warn("Failed to add building shadows:", e);
-              }
-            }
-
-            // Add invisible fill layer for building selection queries.
-            // queryRenderedFeatures on fill-extrusion layers is unreliable when terrain is enabled;
-            // a flat fill layer on the same source returns correct hit-test results regardless of terrain.
-            if (!map.getLayer('building-selection')) {
-              try {
-                map.addLayer({
-                  'id': 'building-selection',
-                  'source': 'openmaptiles',
-                  'source-layer': 'building',
-                  'type': 'fill',
-                  'minzoom': 14,
-                  'paint': {
-                    'fill-color': '#000000',
-                    'fill-opacity': 0,
-                  }
-                });
-              } catch (e) {
-                console.warn("Failed to add building selection layer:", e);
-              }
-            }
-
-          } catch (e) {
-            console.error("Error modifying style:", e);
-            setDebugInfo(`Error modifying style: ${e}`);
           }
         };
 
-        map.on("styleload", setupStyle);
-
-        // Re-add custom layers if terrain triggers a style reload
-        map.on("styledata", () => {
-          if (cancelled || !map.isStyleLoaded()) return;
-          if (!map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection')) {
-            setupStyle();
+        let settingUp = false;
+        const setupStyle = () => {
+          if (cancelled || settingUp || !map.getStyle()) return;
+          settingUp = true;
+          try {
+            applyMonochrome();
+            ensureAppLayers();
+          } catch (e) {
+            console.error("Error modifying style:", e);
+          } finally {
+            settingUp = false;
           }
+        };
+
+        const appLayersMissing = () =>
+          !map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection');
+
+        map.on("style.load", setupStyle);
+
+        map.on("styledata", () => {
+          if (cancelled || settingUp) return;
+          if (appLayersMissing()) setupStyle();
         });
 
         const timeoutId = window.setTimeout(() => {
@@ -440,6 +408,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         map.once("load", () => {
           if (cancelled) return;
           window.clearTimeout(timeoutId);
+          setupStyle();
           setDebugInfo("Map loaded successfully!");
           setMapReady(true);
           mapRef.current = map;
@@ -475,6 +444,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
          map.on("click", (e: any) => {
   if (selectionModeRef.current !== "selecting") return;
+  if (!map.getLayer("building-selection")) setupStyle();
 
   const bbox: [[number, number], [number, number]] = [
     [e.point.x - 5, e.point.y - 5],
@@ -534,6 +504,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               removeHoverHighlight(map);
               return;
             }
+            if (!map.getLayer("building-selection")) setupStyle();
             const features = map.queryRenderedFeatures(e.point, {
               layers: ["building-selection"],
             });
