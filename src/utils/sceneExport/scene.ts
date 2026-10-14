@@ -1,15 +1,15 @@
 import earcut from "earcut";
 import {
   allPolygonRings,
-  computeBuildingFillers,
+  BASE_EMBED_M,
   createLocalFrame,
-  displayBase,
   findHitPolygon,
-  isRenderablePart,
   openRing,
-  partHeights,
+  prepareTile,
+  resolveGrounds,
   ringArea,
   ringCentroid,
+  seatPiece,
   sunlightBandIndex,
 } from "../heatmap3d";
 import type { FocusedBuilding, LocalFrame, SurfacePatch, TerrainSampler } from "../heatmap3d";
@@ -25,7 +25,6 @@ export const SCENE_HALF_EXTENT_M = 150;
 export const TERRAIN_MARGIN_M = 120;
 const CONTOUR_INTERVAL_M = 5;
 const HEATMAP_OFFSET_M = 0.15;
-const BASE_EMBED_M = 0.5;
 const MIN_AREA_M2 = 0.5;
 
 export type Scene3DInput = {
@@ -127,45 +126,41 @@ function surroundingBuildings(
   const out: SceneFace[][] = [];
   const wideBox: Box = { minX: -2 * h, minY: -2 * h, maxX: 2 * h, maxY: 2 * h };
   const footprint = focused ? localPolygons(focused.geometry, frame, wideBox) : [];
+  const groundAt = (lng: number, lat: number) => {
+    const [x, y] = frame.toLocal(lng, lat);
+    return gridHeight(grid, x, y);
+  };
 
-  for (const tile of buildingsFromTiles(tiles)) {
+  const tileData = buildingsFromTiles(tiles);
+  const prepared = tileData.map((tile) => prepareTile(tile, groundAt));
+  const grounds = resolveGrounds(prepared);
+
+  tileData.forEach((tile, ti) => {
     const [w, s, e, n] = tile.bounds;
     const [minX, minY] = frame.toLocal(w, s);
     const [maxX, maxY] = frame.toLocal(e, n);
     const box: Box = { minX: Math.max(minX, -h), minY: Math.max(minY, -h), maxX: Math.min(maxX, h), maxY: Math.min(maxY, h) };
-    if (box.minX >= box.maxX || box.minY >= box.maxY) continue;
+    if (box.minX >= box.maxX || box.minY >= box.maxY) return;
 
-    const pieces: { geometry: any; base: number; top: number }[] = [];
-    for (const f of tile.features) {
-      if (!isRenderablePart(f.properties)) continue;
-      const { height, base } = partHeights(f.properties);
-      pieces.push({ geometry: f.geometry, base: displayBase(base), top: height });
-    }
-    for (const f of computeBuildingFillers(tile.features).features) {
-      pieces.push({ geometry: f.geometry, base: f.properties.base, top: f.properties.top });
-    }
-
-    for (const piece of pieces) {
-      if (piece.top - piece.base < 0.1) continue;
-      for (const rings of localPolygons(piece.geometry, frame, box)) {
+    for (const piece of prepared[ti].pieces) {
+      const { bottom, top } = seatPiece(piece, grounds[ti].ground[piece.group]);
+      for (const rings of localPolygons({ type: "Polygon", coordinates: piece.rings }, frame, box)) {
         if (footprint.length > 0 && mostlyInside(rings, footprint)) continue;
-        const [cx, cy] = ringCentroid(rings[0]);
-        const ground = gridHeight(grid, cx, cy);
-        const bottom = piece.base <= 0.01 ? lowestGround(rings, grid) - BASE_EMBED_M : ground + piece.base;
-        out.push(prismFaces(rings, bottom, ground + piece.top, box, h));
+        out.push(prismFaces(rings, bottom, top, box, h));
       }
     }
-  }
+  });
   return out;
 }
 
 function selectedBody(focused: NonNullable<FocusedBuilding>, frame: LocalFrame, grid: TerrainGrid, h: number, hasHeatmap: boolean) {
   const box: Box = { minX: -h, minY: -h, maxX: h, maxY: h };
+  const polygons = localPolygons(focused.geometry, frame, box);
   const [cx, cy] = frame.toLocal(focused.lng, focused.lat);
-  const ground = gridHeight(grid, cx, cy);
+  const ground = polygons.length > 0 ? Math.min(...polygons.map((rings) => lowestGround(rings, grid))) : gridHeight(grid, cx, cy);
   const faces: SceneFace[] = [];
-  for (const rings of localPolygons(focused.geometry, frame, box)) {
-    const bottom = focused.baseHeight <= 0.01 ? lowestGround(rings, grid) - BASE_EMBED_M : ground + focused.baseHeight;
+  for (const rings of polygons) {
+    const bottom = focused.baseHeight <= 0.01 ? ground - BASE_EMBED_M : ground + focused.baseHeight;
     // The heatmap tiles already cover the visible building; only the footing below its ground level stays solid.
     const top = hasHeatmap ? Math.min(ground, ground + focused.height) : ground + focused.height;
     if (top - bottom > 0.05) faces.push(...prismFaces(rings, bottom, top, null, h));

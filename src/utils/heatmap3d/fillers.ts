@@ -1,9 +1,6 @@
 import { allPolygonRings, pointInPolygon, polygonCentroid } from "./geometry";
 import { partHeights, RAISED_PART_OVERLAP_M } from "./buildingProps";
 
-export const FILLER_SOURCE = "building-fillers";
-export const FILLER_LAYER = "building-fillers";
-
 const MIN_THICK_PART_M = 8;
 const SUPPORT_TOLERANCE_M = 2;
 
@@ -100,47 +97,4 @@ export function computeBuildingFillers(sourceFeatures: any[]): any {
   }
 
   return { type: "FeatureCollection", features: fillers };
-}
-
-export function addBuildingFillerLayer(map: any, color: string): void {
-  if (!map.getSource(FILLER_SOURCE)) {
-    map.addSource(FILLER_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  }
-  if (!map.getLayer(FILLER_LAYER)) {
-    map.addLayer({
-      id: FILLER_LAYER,
-      source: FILLER_SOURCE,
-      type: "fill-extrusion",
-      minzoom: 14,
-      paint: {
-        "fill-extrusion-color": color,
-        "fill-extrusion-height": ["get", "top"],
-        "fill-extrusion-base": ["get", "base"],
-        "fill-extrusion-opacity": 1,
-        "fill-extrusion-vertical-gradient": true,
-      },
-    });
-  }
-}
-
-/** Recomputes fillers whenever new building tiles arrive, once the map settles. */
-export function watchBuildingFillers(map: any, buildingSourceId: string): void {
-  let dirty = true;
-  const onSourceData = (e: any) => {
-    if (e.sourceId === buildingSourceId && e.tile) dirty = true;
-  };
-  const onIdle = () => {
-    if (!dirty) return;
-    const source = map.getSource(FILLER_SOURCE);
-    if (!source || !map.getSource(buildingSourceId)) return;
-    dirty = false;
-    try {
-      const features = map.querySourceFeatures(buildingSourceId, { sourceLayer: "building" });
-      source.setData(computeBuildingFillers(features));
-    } catch (err) {
-      console.warn("Failed to update building fillers:", err);
-    }
-  };
-  map.on("sourcedata", onSourceData);
-  map.on("idle", onIdle);
 }

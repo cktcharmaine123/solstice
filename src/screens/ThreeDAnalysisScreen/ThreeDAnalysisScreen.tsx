@@ -15,20 +15,17 @@ import {
   deduplicateFeatures,
   collectBuildingParts,
   partHeights,
-  BUILDING_HEIGHT_EXPR,
-  DISPLAY_BASE_EXPR,
-  FILLER_LAYER,
-  addBuildingFillerLayer,
-  watchBuildingFillers,
   RENDERABLE_BUILDING_FILTER,
-  queryNearbyBuildings,
   renderHeatmapLayers,
   setHoverHighlight,
   removeHoverHighlight,
-  createTerrainSampler,
-  preloadTerrainTiles,
-  isTerrainReady,
-  clearTerrainCache,
+  createCleanTerrainSampler,
+  preloadCleanTerrainBox,
+  registerCleanTerrainProtocol,
+  CLEAN_TERRAIN_PROTOCOL,
+  createLiveBuildings,
+  LIVE_BUILDING_LAYER,
+  type LiveBuildings,
   METERS_PER_DEG,
   AVG_BUILDING_HEIGHT_M,
   type SurfacePatch,
@@ -71,6 +68,15 @@ const MAX_PITCH = 65;
 const SUN_GROUND_DIST_M = 250;
 
 const HK_BBOX = { minLng: 113.8, maxLng: 114.5, minLat: 22.15, maxLat: 22.6 };
+const NEARBY_RADIUS_M = 400;
+// Hills this far away can still shade the selected building.
+const TERRAIN_REACH_M = 2100;
+
+function preloadTerrainAround(lng: number, lat: number): Promise<boolean> {
+  const dLat = TERRAIN_REACH_M / METERS_PER_DEG;
+  const dLng = dLat / Math.cos((lat * Math.PI) / 180);
+  return preloadCleanTerrainBox(lng - dLng, lat - dLat, lng + dLng, lat + dLat);
+}
 
 function isInHongKong(lng: number, lat: number): boolean {
   return lng >= HK_BBOX.minLng && lng <= HK_BBOX.maxLng && lat >= HK_BBOX.minLat && lat <= HK_BBOX.maxLat;
@@ -99,6 +105,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const selectionModeRef = useRef<SelectionMode>("idle");
   const savedCameraRef = useRef<{ pitch: number; zoom: number; center: [number, number]; bearing: number } | null>(null);
   const terrainSamplerRef = useRef<TerrainSampler | null>(null);
+  const liveBuildingsRef = useRef<LiveBuildings | null>(null);
+  const focusPointRef = useRef<[number, number] | null>(null);
   const navigate = useNavigate();
   const { t } = useLanguage();
   const tRef = useRef(t);
@@ -176,9 +184,9 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     let cancelled = false;
     setTerrainLoading(true);
 
-    preloadTerrainTiles(center[0], center[1], 3).then(() => {
+    preloadTerrainAround(center[0], center[1]).then(() => {
       if (cancelled) return;
-      terrainSamplerRef.current = createTerrainSampler();
+      terrainSamplerRef.current = createCleanTerrainSampler();
       setTerrainEnabled(true);
       setTerrainLoading(false);
     }).catch(() => {
@@ -269,6 +277,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
         const maplibregl = window.maplibregl;
         setDebugInfo("Creating map...");
+        if (useTerrain) registerCleanTerrainProtocol(maplibregl);
 
         map = new maplibregl.Map({
           container: containerRef.current,
@@ -289,8 +298,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           touchZoomRotate: { around: 'center' },
           doubleClickZoom: false,
         });
+        const liveBuildings = createLiveBuildings(map, '#d4d4d4', useTerrain ? createCleanTerrainSampler() : null);
+        liveBuildingsRef.current = liveBuildings;
 
-        const APP_LAYER_IDS = new Set(['3d-buildings', 'building-shadows', 'building-selection', FILLER_LAYER]);
+        const APP_LAYER_IDS = new Set([LIVE_BUILDING_LAYER, 'building-shadows', 'building-selection']);
         const isAppLayer = (id: string) =>
           APP_LAYER_IDS.has(id) ||
           id.startsWith('heatmap-3d') ||
@@ -383,32 +394,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             }
           }
 
-          if (!map.getLayer('3d-buildings')) {
-            try {
-              map.addLayer({
-                'id': '3d-buildings',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
-                'type': 'fill-extrusion',
-                'minzoom': 14,
-                'filter': RENDERABLE_BUILDING_FILTER as any,
-                'paint': {
-                  'fill-extrusion-color': '#d4d4d4',
-                  'fill-extrusion-height': BUILDING_HEIGHT_EXPR as any,
-                  'fill-extrusion-base': DISPLAY_BASE_EXPR as any,
-                  'fill-extrusion-opacity': 1,
-                  'fill-extrusion-vertical-gradient': true
-                }
-              });
-            } catch (e) {
-              console.warn("Failed to add 3D buildings:", e);
-            }
-          }
-
           try {
-            addBuildingFillerLayer(map, '#d4d4d4');
+            liveBuildings.ensureLayers();
           } catch (e) {
-            console.warn("Failed to add building fillers:", e);
+            console.warn("Failed to add 3D buildings:", e);
           }
         };
 
@@ -427,7 +416,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
         };
 
         const appLayersMissing = () =>
-          !map.getLayer('3d-buildings') || !map.getLayer('building-shadows') || !map.getLayer('building-selection') || !map.getLayer(FILLER_LAYER);
+          !map.getLayer(LIVE_BUILDING_LAYER) || !map.getLayer('building-shadows') || !map.getLayer('building-selection');
 
         map.on("style.load", setupStyle);
 
@@ -447,7 +436,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           if (cancelled) return;
           window.clearTimeout(timeoutId);
           setupStyle();
-          watchBuildingFillers(map, 'openmaptiles');
+          liveBuildings.refresh();
           setDebugInfo("Map loaded successfully!");
           setMapReady(true);
           mapRef.current = map;
@@ -458,9 +447,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               try {
                 map.addSource('terrain-dem', {
                   type: 'raster-dem',
-                  tiles: [
-                    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
-                  ],
+                  tiles: [`${CLEAN_TERRAIN_PROTOCOL}://{z}/{x}/{y}`],
                   encoding: 'terrarium',
                   tileSize: 256,
                   maxzoom: 13,
@@ -522,9 +509,12 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             if (!centroid) return;
             const [blng, blat] = centroid;
             const { height, base: baseHeight } = partHeights(bestFeature.feature.properties);
-            const groundElevation = terrainSamplerRef.current
-              ? (terrainSamplerRef.current(blng, blat) ?? 0)
-              : 0;
+            const groundElevation =
+              liveBuildings.groundAt(tapLng, tapLat) ??
+              liveBuildings.groundAt(blng, blat) ??
+              terrainSamplerRef.current?.(blng, blat) ??
+              0;
+            focusPointRef.current = [tapLng, tapLat];
             removeHoverHighlight(map);
             setFocusedBuilding({
               id,
@@ -588,6 +578,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
 
     return () => {
       cancelled = true;
+      liveBuildingsRef.current?.destroy();
+      liveBuildingsRef.current = null;
       if (map) {
         try {
           map.remove();
@@ -818,9 +810,11 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       return;
     }
     setAnalyzing(true);
-    const map = mapRef.current;
-    const calc = () => {
-      const nearbyBuildings = queryNearbyBuildings(map, focusedBuilding, terrainSamplerRef.current);
+    let cancelled = false;
+    const calc = async () => {
+      if (useTerrain) await preloadTerrainAround(focusedBuilding.lng, focusedBuilding.lat);
+      if (cancelled) return;
+      const nearbyBuildings = liveBuildingsRef.current?.nearby(focusedBuilding.lng, focusedBuilding.lat, NEARBY_RADIUS_M) ?? [];
 
       const result = calculate3DHeatmap(
         focusedBuilding.geometry,
@@ -837,14 +831,22 @@ export function ThreeDAnalysisScreen(): JSX.Element {
       setAnalyzing(false);
     };
     const timer = setTimeout(calc, 50);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedBuilding, selectedDate, hasCoords, terrainEnabled]);
 
   // Render 3D heatmap patches as fill-extrusion layers
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    renderHeatmapLayers(map, focusedBuilding, heatmapPatches);
+    renderHeatmapLayers(map, heatmapPatches);
+    const live = liveBuildingsRef.current;
+    const point = focusPointRef.current;
+    if (live && focusedBuilding && point && heatmapPatches.length === 0) live.showHighlight(point[0], point[1]);
+    else live?.hideHighlight();
   }, [focusedBuilding, heatmapPatches, mapReady]);
 
   const goBack = (): void => {

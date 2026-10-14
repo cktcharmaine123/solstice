@@ -31,19 +31,25 @@ export { calculate3DHeatmap } from "./calculation";
 
 export { deduplicateFeatures, collectBuildingParts, type SelectedBuilding } from "./buildingSelection";
 
-export { partHeights, displayBase, isRenderablePart, BUILDING_HEIGHT_EXPR, DISPLAY_BASE_EXPR, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
+export { partHeights, displayBase, isRenderablePart, RENDERABLE_BUILDING_FILTER } from "./buildingProps";
 
-export { FILLER_LAYER, addBuildingFillerLayer, computeBuildingFillers, watchBuildingFillers } from "./fillers";
+export { computeBuildingFillers } from "./fillers";
 
-export { queryNearbyBuildings } from "./mapQueries";
+export { cleanGroundHeights, cleanupMargin } from "./groundCleanup";
+
+export { BASE_EMBED_M, prepareTile, resolveGrounds, seatPiece, type PreparedTile } from "./buildingSeating";
+
+export { createLiveBuildings, LIVE_BUILDING_LAYER, type LiveBuildings } from "./liveBuildings";
 
 export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./mapLayers";
 
 export {
   createTerrainSampler,
-  preloadTerrainTiles,
+  createCleanTerrainSampler,
   preloadTerrainBox,
+  preloadCleanTerrainBox,
+  registerCleanTerrainProtocol,
+  CLEAN_TERRAIN_PROTOCOL,
+  LIVE_TERRAIN_ZOOM,
   DETAILED_TERRAIN_ZOOM,
-  isTerrainReady,
-  clearTerrainCache,
 } from "./terrain";

@@ -5,7 +5,7 @@ import { clipLine, clipRing, diagramFrame } from "./geometry";
 import type { DiagramSpec, MapOutlines, PolygonRings, Pt, RoadClass, StreetLabel } from "./types";
 
 const TILEJSON_URL = "https://tiles.openfreemap.org/planet";
-const TILE_ZOOM = 14;
+export const MAP_TILE_ZOOM = 14;
 const LABEL_MIN_LENGTH_M = 40;
 
 const ROAD_STYLE: Record<string, { cls: RoadClass; widthM: number }> = {
@@ -32,7 +32,7 @@ async function tileUrlTemplate(): Promise<string> {
 }
 
 function tileRange(frame: LocalFrame, h: number): { x0: number; x1: number; y0: number; y1: number } {
-  const n = 2 ** TILE_ZOOM;
+  const n = 2 ** MAP_TILE_ZOOM;
   const [west, south] = frame.toLngLat(-h, -h);
   const [east, north] = frame.toLngLat(h, h);
   const tx = (lng: number) => Math.floor(((lng + 180) / 360) * n);
@@ -83,35 +83,50 @@ function longestSegmentLabel(text: string, lines: Pt[][]): StreetLabel | null {
 
 export type MapTile = { x: number; y: number; tile: VectorTile };
 
-let lastTiles: { key: string; promise: Promise<MapTile[]> } | null = null;
+let templatePromise: Promise<string> | null = null;
+const tileRequests = new Map<string, Promise<VectorTile>>();
+const MAX_CACHED_TILES = 64;
 
-/** Downloads the map tiles covering the square; the last set is reused so repeated exports don't refetch. */
+function cachedTemplate(): Promise<string> {
+  if (!templatePromise) {
+    templatePromise = tileUrlTemplate();
+    templatePromise.catch(() => {
+      templatePromise = null;
+    });
+  }
+  return templatePromise;
+}
+
+/** Downloads one map tile; recent tiles are kept so the live view and exports don't refetch them. */
+export function fetchVectorTile(z: number, x: number, y: number): Promise<VectorTile> {
+  const key = `${z}/${x}/${y}`;
+  const existing = tileRequests.get(key);
+  if (existing) return existing;
+  const promise = (async () => {
+    const template = await cachedTemplate();
+    const url = template.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Map tile unavailable (${res.status})`);
+    return new VectorTile(new Pbf(new Uint8Array(await res.arrayBuffer())));
+  })();
+  tileRequests.set(key, promise);
+  promise.catch(() => tileRequests.delete(key));
+  if (tileRequests.size > MAX_CACHED_TILES) tileRequests.delete(tileRequests.keys().next().value as string);
+  return promise;
+}
+
+export function fetchMapTilesAt(coords: { x: number; y: number }[]): Promise<MapTile[]> {
+  return Promise.all(coords.map(async ({ x, y }) => ({ x, y, tile: await fetchVectorTile(MAP_TILE_ZOOM, x, y) })));
+}
+
+/** Downloads the map tiles covering the square. */
 export function fetchMapTiles(spec: Pick<DiagramSpec, "center" | "halfExtentM">): Promise<MapTile[]> {
   const { x0, x1, y0, y1 } = tileRange(diagramFrame(spec), spec.halfExtentM);
-  const key = `${x0}:${x1}:${y0}:${y1}`;
-  if (lastTiles?.key === key) return lastTiles.promise;
-
-  const promise = (async () => {
-    const template = await tileUrlTemplate();
-    const requests: Promise<MapTile>[] = [];
-    for (let x = x0; x <= x1; x++) {
-      for (let y = y0; y <= y1; y++) {
-        const url = template.replace("{z}", String(TILE_ZOOM)).replace("{x}", String(x)).replace("{y}", String(y));
-        requests.push(
-          fetch(url).then(async (res) => {
-            if (!res.ok) throw new Error(`Map tile unavailable (${res.status})`);
-            return { x, y, tile: new VectorTile(new Pbf(new Uint8Array(await res.arrayBuffer()))) };
-          }),
-        );
-      }
-    }
-    return Promise.all(requests);
-  })();
-  lastTiles = { key, promise };
-  promise.catch(() => {
-    if (lastTiles?.promise === promise) lastTiles = null;
-  });
-  return promise;
+  const coords: { x: number; y: number }[] = [];
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) coords.push({ x, y });
+  }
+  return fetchMapTilesAt(coords);
 }
 
 function eachFeature(
@@ -123,7 +138,7 @@ function eachFeature(
   if (!l) return;
   for (let i = 0; i < l.length; i++) {
     const f = l.feature(i);
-    fn(f.properties, f.toGeoJSON(x, y, TILE_ZOOM).geometry, f.id);
+    fn(f.properties, f.toGeoJSON(x, y, MAP_TILE_ZOOM).geometry, f.id);
   }
 }
 
@@ -179,7 +194,7 @@ export type TileBuildings = {
 };
 
 export function buildingsFromTiles(tiles: MapTile[]): TileBuildings[] {
-  const n = 2 ** TILE_ZOOM;
+  const n = 2 ** MAP_TILE_ZOOM;
   const lngAt = (x: number) => (x / n) * 360 - 180;
   const latAt = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
   return tiles.map((tile) => {
