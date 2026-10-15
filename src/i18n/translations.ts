@@ -131,6 +131,8 @@ export type TranslationKey =
   | "exportArea.slow"
   | "exportArea.continue"
   | "exportArea.back"
+  | "map.hkBuildingsCredit"
+  | "map.hkBuildingsFallback"
   | "settings.title"
   | "settings.language"
   | "settings.privacyPolicy"
@@ -273,6 +275,8 @@ const en: Dictionary = {
   "exportArea.slow": "Large areas may take a little longer to export.",
   "exportArea.continue": "Continue",
   "exportArea.back": "Change area",
+  "map.hkBuildingsCredit": "Buildings: Lands Department, HKSAR Government (CSDI Portal)",
+  "map.hkBuildingsFallback": "Government building data could not load, so some buildings come from the standard map.",
 
   "settings.title": "Settings",
   "settings.language": "Language",
@@ -417,6 +421,8 @@ const zhTW: Dictionary = {
   "exportArea.slow": "範圍較大時，匯出可能需要較長時間。",
   "exportArea.continue": "繼續",
   "exportArea.back": "更改範圍",
+  "map.hkBuildingsCredit": "建築物資料：香港特別行政區政府地政總署（空間數據共享平台）",
+  "map.hkBuildingsFallback": "未能載入政府建築物資料，部分建築物改用一般地圖資料。",
 
   "settings.title": "設定",
   "settings.language": "語言",

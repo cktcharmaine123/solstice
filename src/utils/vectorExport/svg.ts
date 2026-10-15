@@ -1,4 +1,5 @@
 import { diagramFrame, latLngToLocal } from "./geometry";
+import { HK_BUILDINGS_CREDIT } from "./hkBuildings";
 import type { DiagramSpec, MapOutlines, PolygonRings, Pt } from "./types";
 
 const MAP_PX = 1000;
@@ -171,7 +172,10 @@ export function buildDiagramSvg(spec: DiagramSpec, map: MapOutlines): string {
       `<path d="M${sx},${sy - 6}V${sy}H${sx + scalePx}V${sy - 6}M${sx + scalePx / 2},${sy}V${sy - 4}" fill="none" stroke="#333333" stroke-width="1.5"/>` +
         `<text x="${sx}" y="${sy + 18}" font-size="12" fill="#555555">0</text>` +
         `<text x="${sx + scalePx}" y="${sy + 18}" text-anchor="middle" font-size="12" fill="#555555">${scaleM} m</text>` +
-        `<text x="${MARGIN + MAP_PX}" y="${sy + 18}" text-anchor="end" font-size="11" fill="#9a9a9a">Map data (c) OpenStreetMap contributors, OpenMapTiles</text>`,
+        `<text x="${MARGIN + MAP_PX}" y="${sy + 18}" text-anchor="end" font-size="11" fill="#9a9a9a">Map data (c) OpenStreetMap contributors, OpenMapTiles</text>` +
+        (map.hkBuildings
+          ? `<text x="${MARGIN + MAP_PX}" y="${sy + 34}" text-anchor="end" font-size="11" fill="#9a9a9a">${HK_BUILDINGS_CREDIT}</text>`
+          : ""),
     ),
   );
 

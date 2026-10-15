@@ -1,5 +1,6 @@
 import { SUNLIGHT_BANDS } from "../heatmap3d";
 import { DxfWriter, layerName, nearestAci, type DxfLayer } from "../vectorExport/dxfWriter";
+import { HK_BUILDINGS_CREDIT } from "../vectorExport/hkBuildings";
 import { gridPoint, heightRange } from "./ground";
 import type { Pt3, Scene3D } from "./types";
 
@@ -88,6 +89,7 @@ export function buildSceneDxf(scene: Scene3D): string {
       ? `Hours of direct sunlight: ${SUNLIGHT_BANDS.map((b) => `${b.label} (layer ${bandLayer(b.key)})`).join(", ")}`
       : "No heatmap included - no building was selected.",
     scene.hasMap ? "Map data (c) OpenStreetMap contributors, OpenMapTiles. Terrain: Mapzen / AWS Terrain Tiles." : "Map data unavailable - buildings and streets not included.",
+    ...(scene.hkBuildings ? [HK_BUILDINGS_CREDIT] : []),
   ];
   w.text("TITLE", [-h, -h - 14], 6, scene.title, { z: floor });
   notes.forEach((n, i) => w.text("TITLE", [-h, -h - 22 - i * 5], 2.5, n, { z: floor }));

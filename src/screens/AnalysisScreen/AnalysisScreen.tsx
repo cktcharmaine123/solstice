@@ -33,6 +33,8 @@ import { formatGraphName, saveGraph } from "../../utils/savedGraphs";
 import { createDiagramSpec, exportDiagram, type DiagramPath } from "../../utils/vectorExport";
 import { VectorExportDialog } from "../../components/VectorExportDialog";
 import { exportAreaRing, snapExportArea } from "../../utils/exportArea";
+import { hasHkBuildingData } from "../../utils/vectorExport/hkBuildings";
+import { HkBuildingsLayer } from "./HkBuildingsLayer";
 import { useIsDesktop } from "../../lib/useIsDesktop";
 import { peekPendingAnalysisState, setPendingAnalysisState, setPendingRevert } from "../../utils/revertStore";
 import lookupTimezone from "tz-lookup";
@@ -525,6 +527,7 @@ function AnalysisScreenContent(): JSX.Element {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [chosenExportAreaM, setChosenExportAreaM] = useState<number | null>(null);
+  const [hkFallback, setHkFallback] = useState(false);
   const isDesktop = useIsDesktop();
   const chipsRowRef = useRef<HTMLDivElement | null>(null);
   const mapSectionRef = useRef<HTMLElement | null>(null);
@@ -707,6 +710,11 @@ function AnalysisScreenContent(): JSX.Element {
   ]);
 
   const exportAreaM = chosenExportAreaM ?? (diagramSpec ? snapExportArea(diagramSpec.halfExtentM) : null);
+  const showHkBuildings = !!center && hasHkBuildingData(center.lng, center.lat);
+
+  useEffect(() => {
+    if (!showHkBuildings) setHkFallback(false);
+  }, [showHkBuildings]);
 
   const overlayIcons = useMemo(() => {
     const icons: Record<string, L.DivIcon> = {};
@@ -1119,6 +1127,7 @@ function AnalysisScreenContent(): JSX.Element {
                 url="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_2f17_1_9b643c4265560a8656bae3bb"
                 crossOrigin="anonymous"
               />
+              {showHkBuildings && <HkBuildingsLayer onFailure={() => setHkFallback(true)} />}
               <MapViewport center={center} pathPoints={pathPoints} />
               <MapClickHandler onPick={handleMapPick} />
               <RightClickRotateHandler />
@@ -1209,6 +1218,12 @@ function AnalysisScreenContent(): JSX.Element {
                   {t("analysis.tapMap")}
                 </p>
               </div>
+            )}
+            {showHkBuildings && (
+              <p className="pointer-events-none absolute bottom-10 right-6 z-[500] max-w-[calc(100%-48px)] rounded bg-white/85 px-1.5 py-0.5 text-right font-['Inter'] text-[10px] leading-[1.5] text-[#666666]">
+                {hkFallback && <span className="text-[#7a4a4a]">{t("map.hkBuildingsFallback")} </span>}
+                {t("map.hkBuildingsCredit")}
+              </p>
             )}
             {locationError && (
               <p className="absolute inset-x-4 bottom-4 z-[500] rounded-md bg-white/95 px-3 py-2 text-xs text-red-600 shadow-sm">

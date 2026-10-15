@@ -1,7 +1,8 @@
 import type { TranslationKey } from "../../i18n/translations";
 import { buildDiagramDxf } from "./dxf";
 import { computeHalfExtent } from "./geometry";
-import { emptyMapOutlines, fetchMapOutlines } from "./mapData";
+import { fetchHkBuildingsForTiles, hasHkBuildingData } from "./hkBuildings";
+import { emptyMapOutlines, fetchMapTiles, outlinesFromTiles } from "./mapData";
 import { buildDiagramSvg } from "./svg";
 import type { DiagramPath, DiagramSpec, ExportFormat } from "./types";
 
@@ -51,7 +52,9 @@ export async function exportDiagram(spec: DiagramSpec, format: ExportFormat, ski
   let map = emptyMapOutlines();
   if (!skipMissing) {
     try {
-      map = await fetchMapOutlines(spec);
+      const tiles = await fetchMapTiles(spec);
+      const hk = hasHkBuildingData(spec.center.lng, spec.center.lat) ? await fetchHkBuildingsForTiles(tiles) : null;
+      map = outlinesFromTiles(tiles, spec, hk);
     } catch (err) {
       console.warn("Street map for export failed:", err);
       throw new ExportDataError("export.mapFailed", "export.withoutMap");

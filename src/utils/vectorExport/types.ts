@@ -34,6 +34,8 @@ export type MapOutlines = {
   buildings: PolygonRings[];
   roads: { cls: RoadClass; widthM: number; line: Pt[] }[];
   railways: Pt[][];
+  /** Buildings come from the Hong Kong Lands Department instead of the street map. */
+  hkBuildings: boolean;
 };
 
 export type ExportFormat = "svg" | "dxf" | "obj";

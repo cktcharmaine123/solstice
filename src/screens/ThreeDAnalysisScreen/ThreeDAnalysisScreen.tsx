@@ -8,6 +8,7 @@ import { VectorExportDialog, type ExportFile } from "../../components/VectorExpo
 import { useIsDesktop } from "../../lib/useIsDesktop";
 import { exportScene3D, SCENE_HALF_EXTENT_M } from "../../utils/sceneExport";
 import { exportAreaRing, snapExportArea } from "../../utils/exportArea";
+import { hasHkBuildingData } from "../../utils/vectorExport/hkBuildings";
 import { useLanguage } from "../../i18n/LanguageContext";
 import type { TranslationKey } from "../../i18n/translations";
 import {
@@ -25,6 +26,7 @@ import {
   registerCleanTerrainProtocol,
   CLEAN_TERRAIN_PROTOCOL,
   createLiveBuildings,
+  HK_OUTLINE_SOURCE,
   LIVE_BUILDING_LAYER,
   type LiveBuildings,
   METERS_PER_DEG,
@@ -133,6 +135,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const [terrainLoading, setTerrainLoading] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportAreaM, setExportAreaM] = useState(() => snapExportArea(SCENE_HALF_EXTENT_M));
+  const [hkFallback, setHkFallback] = useState(false);
   const isDesktop = useIsDesktop();
 
   const rawLat = searchParams.get("lat") ?? sessionStorage.getItem("siteLat");
@@ -146,7 +149,8 @@ export function ThreeDAnalysisScreen(): JSX.Element {
   const center: [number, number] = hasCoords ? [lng, lat] : DEFAULT_CENTER;
   const siteTitle = searchParams.get("location")?.trim() || `${center[1].toFixed(4)}, ${center[0].toFixed(4)}`;
 
-  const useTerrain = hasCoords ? isInHongKong(lng, lat) : isInHongKong(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
+  const useTerrain = isInHongKong(center[0], center[1]);
+  const useHkBuildings = hasHkBuildingData(center[0], center[1]);
 
   const locationTimeZone = useMemo<string | undefined>(() => {
     if (!hasCoords) return undefined;
@@ -258,6 +262,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
     containerRef.current.innerHTML = "";
     let cancelled = false;
     let map: any = null;
+    setHkFallback(false);
 
     const loadMapLibre = async () => {
       try {
@@ -304,7 +309,15 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           touchZoomRotate: { around: 'center' },
           doubleClickZoom: false,
         });
-        const liveBuildings = createLiveBuildings(map, '#d4d4d4', useTerrain ? createCleanTerrainSampler() : null);
+        const liveBuildings = createLiveBuildings(
+          map,
+          '#d4d4d4',
+          useTerrain ? createCleanTerrainSampler() : null,
+          useHkBuildings ? { onFallback: () => { if (!cancelled) setHkFallback(true); } } : null,
+        );
+        const buildingSource = useHkBuildings
+          ? { 'source': HK_OUTLINE_SOURCE }
+          : { 'source': 'openmaptiles', 'source-layer': 'building' };
         liveBuildingsRef.current = liveBuildings;
 
         const APP_LAYER_IDS = new Set([LIVE_BUILDING_LAYER, 'building-shadows', 'building-selection']);
@@ -322,7 +335,11 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           const layers: any[] = map.getStyle()?.layers ?? [];
 
           layers
-            .filter((layer) => !isAppLayer(layer.id) && (layer.type === 'symbol' || layer.type === 'fill-extrusion'))
+            .filter((layer) =>
+              !isAppLayer(layer.id) &&
+              (layer.type === 'symbol' ||
+                layer.type === 'fill-extrusion' ||
+                (useHkBuildings && layer['source-layer'] === 'building')))
             .forEach((layer) => {
               try { map.removeLayer(layer.id); } catch (e) { /* already removed */ }
             });
@@ -357,15 +374,22 @@ export function ThreeDAnalysisScreen(): JSX.Element {
           });
         };
 
+        const belowBuildings = () => (map.getLayer(LIVE_BUILDING_LAYER) ? LIVE_BUILDING_LAYER : undefined);
+
         const ensureAppLayers = () => {
           if (!map.getSource('openmaptiles')) return;
+
+          try {
+            liveBuildings.ensureLayers();
+          } catch (e) {
+            console.warn("Failed to add 3D buildings:", e);
+          }
 
           if (!map.getLayer('building-shadows')) {
             try {
               map.addLayer({
                 'id': 'building-shadows',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
+                ...buildingSource,
                 'type': 'fill',
                 'minzoom': 14,
                 'paint': {
@@ -374,7 +398,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                   'fill-translate': [0, 0],
                   'fill-translate-anchor': 'map'
                 }
-              });
+              }, belowBuildings());
             } catch (e) {
               console.warn("Failed to add building shadows:", e);
             }
@@ -385,8 +409,7 @@ export function ThreeDAnalysisScreen(): JSX.Element {
             try {
               map.addLayer({
                 'id': 'building-selection',
-                'source': 'openmaptiles',
-                'source-layer': 'building',
+                ...buildingSource,
                 'type': 'fill',
                 'minzoom': 14,
                 'filter': RENDERABLE_BUILDING_FILTER as any,
@@ -394,16 +417,10 @@ export function ThreeDAnalysisScreen(): JSX.Element {
                   'fill-color': '#000000',
                   'fill-opacity': 0,
                 }
-              });
+              }, belowBuildings());
             } catch (e) {
               console.warn("Failed to add building selection layer:", e);
             }
-          }
-
-          try {
-            liveBuildings.ensureLayers();
-          } catch (e) {
-            console.warn("Failed to add 3D buildings:", e);
           }
         };
 
@@ -1210,6 +1227,12 @@ export function ThreeDAnalysisScreen(): JSX.Element {
               </label>
             </span>
           </div>
+          {useHkBuildings && (
+            <p className="pb-0.5 pt-1 text-right font-['Inter'] text-[10px] leading-[1.5] text-[#828282]">
+              {hkFallback && <span className="text-[#7a4a4a]">{t("map.hkBuildingsFallback")} </span>}
+              {t("map.hkBuildingsCredit")}
+            </p>
+          )}
         </section>
       )}
       {isDesktop && (

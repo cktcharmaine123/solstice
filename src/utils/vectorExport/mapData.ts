@@ -122,14 +122,29 @@ function eachFeature(
   }
 }
 
-export async function fetchMapOutlines(spec: Pick<DiagramSpec, "center" | "halfExtentM">): Promise<MapOutlines> {
-  return outlinesFromTiles(await fetchMapTiles(spec), spec);
-}
-
-export function outlinesFromTiles(tiles: MapTile[], spec: Pick<DiagramSpec, "center" | "halfExtentM">): MapOutlines {
+/** Map outlines of the square; `buildings`, when given, replaces the map's own buildings. */
+export function outlinesFromTiles(
+  tiles: MapTile[],
+  spec: Pick<DiagramSpec, "center" | "halfExtentM">,
+  buildings: TileBuildings[] | null = null,
+): MapOutlines {
   const frame = diagramFrame(spec);
   const h = spec.halfExtentM;
   const out = emptyMapOutlines();
+
+  if (buildings) {
+    out.hkBuildings = true;
+    const seen = new Set<number>();
+    for (const tile of buildings) {
+      for (const f of tile.features) {
+        if (f.id !== undefined) {
+          if (seen.has(f.id)) continue;
+          seen.add(f.id);
+        }
+        out.buildings.push(...polygonsOf(f.geometry, frame, h));
+      }
+    }
+  }
 
   for (const tile of tiles) {
     eachFeature(tile, "park", (_p, g) => out.parks.push(...polygonsOf(g, frame, h)));
@@ -138,7 +153,7 @@ export function outlinesFromTiles(tiles: MapTile[], spec: Pick<DiagramSpec, "cen
     });
     eachFeature(tile, "water", (_p, g) => out.water.push(...polygonsOf(g, frame, h)));
     eachFeature(tile, "waterway", (_p, g) => out.waterways.push(...linesOf(g, frame, h)));
-    eachFeature(tile, "building", (_p, g) => out.buildings.push(...polygonsOf(g, frame, h)));
+    if (!buildings) eachFeature(tile, "building", (_p, g) => out.buildings.push(...polygonsOf(g, frame, h)));
     eachFeature(tile, "transportation", (p, g) => {
       if (p.brunnel === "tunnel") return;
       const lines = linesOf(g, frame, h);
@@ -161,17 +176,22 @@ export type TileBuildings = {
   features: { id: number | undefined; type: "Feature"; geometry: any; properties: any }[];
 };
 
-export function buildingsFromTiles(tiles: MapTile[]): TileBuildings[] {
+/** Edges of a map tile as [west, south, east, north]. */
+export function tileBounds(x: number, y: number): [number, number, number, number] {
   const n = 2 ** MAP_TILE_ZOOM;
-  const lngAt = (x: number) => (x / n) * 360 - 180;
-  const latAt = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+  const lngAt = (tx: number) => (tx / n) * 360 - 180;
+  const latAt = (ty: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * ty) / n))) * 180) / Math.PI;
+  return [lngAt(x), latAt(y + 1), lngAt(x + 1), latAt(y)];
+}
+
+export function buildingsFromTiles(tiles: MapTile[]): TileBuildings[] {
   return tiles.map((tile) => {
     const features: TileBuildings["features"] = [];
     eachFeature(tile, "building", (properties, geometry, id) => features.push({ id, type: "Feature", geometry, properties }));
-    return { bounds: [lngAt(tile.x), latAt(tile.y + 1), lngAt(tile.x + 1), latAt(tile.y)], features };
+    return { bounds: tileBounds(tile.x, tile.y), features };
   });
 }
 
 export function emptyMapOutlines(): MapOutlines {
-  return { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [] };
+  return { parks: [], water: [], waterways: [], buildings: [], roads: [], railways: [], hkBuildings: false };
 }

@@ -39,7 +39,7 @@ export { cleanGroundHeights, cleanupMargin } from "./groundCleanup";
 
 export { BASE_EMBED_M, MIN_VISIBLE_SHARE, prepareTile, resolveGrounds, seatPiece, type PreparedTile } from "./buildingSeating";
 
-export { createLiveBuildings, LIVE_BUILDING_LAYER, type LiveBuildings } from "./liveBuildings";
+export { createLiveBuildings, HK_OUTLINE_SOURCE, LIVE_BUILDING_LAYER, type LiveBuildings } from "./liveBuildings";
 
 export { renderHeatmapLayers, setHoverHighlight, removeHoverHighlight } from "./mapLayers";
 

@@ -38,6 +38,8 @@ export type Scene3D = {
   originElevation: number;
   hasTerrain: boolean;
   hasMap: boolean;
+  /** Buildings come from the Hong Kong Lands Department instead of the street map. */
+  hkBuildings: boolean;
   terrain: TerrainGrid;
   contours: ContourLevel[];
   contourInterval: number;

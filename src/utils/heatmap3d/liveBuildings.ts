@@ -1,4 +1,5 @@
-import { fetchVectorTile, buildingsFromTiles, MAP_TILE_ZOOM } from "../vectorExport/mapData";
+import { fetchVectorTile, buildingsFromTiles, MAP_TILE_ZOOM, type TileBuildings } from "../vectorExport/mapData";
+import { fetchHkTileBuildings } from "../vectorExport/hkBuildings";
 import type { Box } from "../vectorExport/geometry";
 import { clipPolygon, prepareTile, resolveGrounds, seatPiece, type PreparedPiece, type PreparedTile } from "./buildingSeating";
 import { createLocalFrame, pointInPolygon, type Pt } from "./geometry";
@@ -6,6 +7,8 @@ import { preloadCleanTerrainBox } from "./terrain";
 import { METERS_PER_DEG, type NearbyBuilding, type TerrainSampler } from "./types";
 
 export const LIVE_BUILDING_LAYER = "3d-buildings";
+/** Whole government outlines of the loaded tiles, for tap hit-testing and flat shadows in Hong Kong. */
+export const HK_OUTLINE_SOURCE = "hk-building-outlines";
 const LIVE_SOURCE = "live-buildings";
 const HIGHLIGHT_SOURCE = "focused-building-source";
 const HIGHLIGHT_LAYER = "focused-building-highlight";
@@ -24,7 +27,17 @@ const KEEP_RING = 1;
 const MIN_LOAD_ZOOM = 13.5;
 
 type RenderPiece = { piece: number; rings: Pt[][]; elev: number };
-type LiveTile = { x: number; y: number; prepared: PreparedTile; render: RenderPiece[]; bounds: [number, number, number, number] };
+type LiveTile = {
+  x: number;
+  y: number;
+  prepared: PreparedTile;
+  render: RenderPiece[];
+  bounds: [number, number, number, number];
+  raw: TileBuildings["features"];
+};
+
+/** Uses government buildings for every tile; a tile whose government data fails falls back to the usual map. */
+export type HkBuildingOptions = { onFallback: () => void };
 
 export type LiveBuildings = {
   ensureLayers: () => void;
@@ -161,11 +174,17 @@ function renderPieces(pieces: PreparedPiece[], ground: TerrainSampler): RenderPi
 
 const closeRing = (ring: Pt[]) => [...ring, ring[0]];
 
-export function createLiveBuildings(map: any, color: string, terrain: TerrainSampler | null): LiveBuildings {
+export function createLiveBuildings(
+  map: any,
+  color: string,
+  terrain: TerrainSampler | null,
+  hk: HkBuildingOptions | null = null,
+): LiveBuildings {
   const tiles = new Map<string, LiveTile>();
   const loading = new Set<string>();
   let grounds = new Map<string, { ground: number[]; key: number[] }>();
   let features: any[] = [];
+  let outlines: any[] = [];
   let highlight: any[] = [];
   let destroyed = false;
   const sampler: TerrainSampler = terrain ?? (() => 0);
@@ -174,6 +193,9 @@ export function createLiveBuildings(map: any, color: string, terrain: TerrainSam
   const sourceData = (list: any[]) => ({ type: "FeatureCollection", features: list });
 
   const ensureLayers = () => {
+    if (hk && !map.getSource(HK_OUTLINE_SOURCE)) {
+      map.addSource(HK_OUTLINE_SOURCE, { type: "geojson", data: sourceData(outlines) });
+    }
     if (!map.getSource(LIVE_SOURCE)) {
       map.addSource(LIVE_SOURCE, { type: "geojson", data: sourceData(features), ...SOURCE_OPTIONS });
     }
@@ -221,6 +243,33 @@ export function createLiveBuildings(map: any, color: string, terrain: TerrainSam
     });
     features = next;
     map.getSource(LIVE_SOURCE)?.setData(sourceData(features));
+    if (hk) {
+      const seen = new Set<number>();
+      outlines = [];
+      for (const [, t] of active) {
+        for (const f of t.raw) {
+          if (f.id !== undefined) {
+            if (seen.has(f.id)) continue;
+            seen.add(f.id);
+          }
+          outlines.push(f);
+        }
+      }
+      map.getSource(HK_OUTLINE_SOURCE)?.setData(sourceData(outlines));
+    }
+  };
+
+  const fetchBuildings = async (x: number, y: number): Promise<TileBuildings> => {
+    if (hk) {
+      try {
+        return await fetchHkTileBuildings(x, y);
+      } catch (err) {
+        console.warn("Hong Kong building data failed, using map buildings:", err);
+        hk.onFallback();
+      }
+    }
+    const [buildings] = buildingsFromTiles([{ x, y, tile: await fetchVectorTile(MAP_TILE_ZOOM, x, y) }]);
+    return buildings;
   };
 
   const loadTile = async (x: number, y: number): Promise<boolean> => {
@@ -228,15 +277,21 @@ export function createLiveBuildings(map: any, color: string, terrain: TerrainSam
     if (tiles.has(key) || loading.has(key)) return false;
     loading.add(key);
     try {
-      const tile = await fetchVectorTile(MAP_TILE_ZOOM, x, y);
-      const [buildings] = buildingsFromTiles([{ x, y, tile }]);
+      const buildings = await fetchBuildings(x, y);
       if (terrain) {
         const [w, s, e, n] = buildings.bounds;
         await preloadCleanTerrainBox(w, s, e, n);
       }
       if (destroyed) return false;
       const prepared = prepareTile(buildings, groundFn);
-      tiles.set(key, { x, y, prepared, render: renderPieces(prepared.pieces, sampler), bounds: buildings.bounds });
+      tiles.set(key, {
+        x,
+        y,
+        prepared,
+        render: renderPieces(prepared.pieces, sampler),
+        bounds: buildings.bounds,
+        raw: buildings.features,
+      });
       return true;
     } catch (err) {
       console.warn("Failed to load buildings for tile", key, err);

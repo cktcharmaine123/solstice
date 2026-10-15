@@ -1,5 +1,6 @@
 import { createLocalFrame, createTerrainSampler, DETAILED_TERRAIN_ZOOM, preloadTerrainBox } from "../heatmap3d";
 import { ExportDataError, fileBlob, type ExportFormat } from "../vectorExport";
+import { fetchHkBuildingsForTiles, hasHkBuildingData } from "../vectorExport/hkBuildings";
 import { fetchMapTiles, type MapTile } from "../vectorExport/mapData";
 import { buildSceneDxf } from "./dxf";
 import { buildSceneObj, MTL_FILE, OBJ_FILE } from "./obj";
@@ -42,8 +43,10 @@ export async function exportScene3D(
   if (!skipMissing && !tiles) throw new ExportDataError("export3d.mapFailed", "export3d.withoutMap");
   if (!skipMissing && !terrainOk) throw new ExportDataError("export3d.terrainFailed", "export3d.flatGround");
 
+  const hkBuildings =
+    tiles && hasHkBuildingData(input.origin.lng, input.origin.lat) ? await fetchHkBuildingsForTiles(tiles) : null;
   const sampler = terrainOk ? createTerrainSampler(DETAILED_TERRAIN_ZOOM) : null;
-  const scene = buildScene3D(input, tiles ?? [], sampler, halfExtentM);
+  const scene = buildScene3D(input, tiles ?? [], sampler, halfExtentM, hkBuildings);
   if (format === "obj") {
     const { obj, mtl } = buildSceneObj(scene);
     return zipFiles([

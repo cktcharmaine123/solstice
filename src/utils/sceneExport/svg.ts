@@ -1,4 +1,5 @@
 import { SUNLIGHT_BANDS } from "../heatmap3d";
+import { HK_BUILDINGS_CREDIT } from "../vectorExport/hkBuildings";
 import { esc, layerId } from "../vectorExport/svg";
 import { gridPoint, heightRange } from "./ground";
 import type { HeatmapFace, Pt, Pt3, Scene3D, SceneFace } from "./types";
@@ -233,6 +234,9 @@ export function buildSceneSvg(scene: Scene3D): string {
     scene.hasTerrain ? "Terrain: AWS Terrain Tiles" : "Ground heights unavailable - shown flat",
   ].join(" - ");
   legend.push(`<text x="${MARGIN + DRAW_W}" y="${height - 30}" text-anchor="end" font-size="11" fill="#9a9a9a">${esc(credits)}</text>`);
+  if (scene.hkBuildings) {
+    legend.push(`<text x="${MARGIN + DRAW_W}" y="${height - 14}" text-anchor="end" font-size="11" fill="#9a9a9a">${HK_BUILDINGS_CREDIT}</text>`);
+  }
   parts.push(layer("Legend", legend.join("")));
 
   parts.push("</svg>\n");

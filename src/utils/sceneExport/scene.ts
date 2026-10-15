@@ -16,7 +16,7 @@ import {
 import type { FocusedBuilding, LocalFrame, SurfacePatch, TerrainSampler } from "../heatmap3d";
 import { clipRingToBox } from "../vectorExport/geometry";
 import type { Box } from "../vectorExport/geometry";
-import { buildingsFromTiles, outlinesFromTiles } from "../vectorExport/mapData";
+import { buildingsFromTiles, outlinesFromTiles, type TileBuildings } from "../vectorExport/mapData";
 import type { MapTile } from "../vectorExport/mapData";
 import { drapeLine, gridHeight, sampleTerrainGrid, traceContours } from "./ground";
 import type { HeatmapFace, Pt, Pt3, Scene3D, SceneFace, TerrainGrid } from "./types";
@@ -137,7 +137,7 @@ function groundUnder(polygons: Rings[], grid: TerrainGrid): { mean: number; low:
 }
 
 function surroundingBuildings(
-  tiles: MapTile[],
+  tileData: TileBuildings[],
   frame: LocalFrame,
   grid: TerrainGrid,
   h: number,
@@ -151,7 +151,6 @@ function surroundingBuildings(
     return gridHeight(grid, x, y);
   };
 
-  const tileData = buildingsFromTiles(tiles);
   const prepared = tileData.map((tile) => prepareTile(tile, groundAt));
   const grounds = resolveGrounds(prepared);
 
@@ -229,6 +228,7 @@ export function buildScene3D(
   tiles: MapTile[],
   sampler: TerrainSampler | null,
   h: number = SCENE_HALF_EXTENT_M,
+  hkBuildings: TileBuildings[] | null = null,
 ): Scene3D {
   const { origin, focused } = input;
   const frame = createLocalFrame(origin.lng, origin.lat);
@@ -259,6 +259,7 @@ export function buildScene3D(
     originElevation,
     hasTerrain: !!sampler,
     hasMap: tiles.length > 0,
+    hkBuildings: !!hkBuildings,
     terrain: grid,
     contours: sampler ? traceContours(grid, CONTOUR_INTERVAL_M) : [],
     contourInterval: CONTOUR_INTERVAL_M,
@@ -267,7 +268,7 @@ export function buildScene3D(
     waterways: outlines.waterways.map((line) => drapeLine(line, grid)),
     roads: outlines.roads.map((r) => ({ cls: r.cls, widthM: r.widthM, line: drapeLine(r.line, grid) })),
     railways: outlines.railways.map((line) => drapeLine(line, grid)),
-    buildings: surroundingBuildings(tiles, frame, grid, h, focused),
+    buildings: surroundingBuildings(hkBuildings ?? buildingsFromTiles(tiles), frame, grid, h, focused),
     selected: selected?.faces ?? [],
     heatmap: hasHeatmap && selected ? heatmapFaces(input.patches, frame, selected.ground) : [],
   };

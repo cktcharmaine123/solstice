@@ -1,5 +1,6 @@
 import { DxfWriter, layerName, nearestAci, type DxfLayer } from "./dxfWriter";
 import { diagramFrame, latLngToLocal } from "./geometry";
+import { HK_BUILDINGS_CREDIT } from "./hkBuildings";
 import type { DiagramSpec, MapOutlines } from "./types";
 
 /** Builds an R12 ASCII DXF: 1 drawing unit = 1 metre, north = +Y, site centre at the origin. */
@@ -68,6 +69,7 @@ export function buildDiagramDxf(spec: DiagramSpec, map: MapOutlines): string {
     w.text("TITLE", [-h, -h - 8 - i * 5], 3, `${label} - sun at ${p.timeLabel}`);
   });
   w.text("TITLE", [-h, -h - 10 - spec.paths.length * 5], 2, "Map data (c) OpenStreetMap contributors, OpenMapTiles");
+  if (map.hkBuildings) w.text("TITLE", [-h, -h - 13 - spec.paths.length * 5], 2, HK_BUILDINGS_CREDIT);
 
   return w.finish();
 }
