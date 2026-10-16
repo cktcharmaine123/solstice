@@ -2,6 +2,7 @@ import "./tailwind.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import { SplashProvider } from "./screens/SplashScreen/SplashContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
@@ -54,6 +55,7 @@ if (!container) {
           </HashRouter>
         </LoadingScreenDismissal>
       </AppErrorBoundary>
+      <Analytics />
     </StrictMode>,
   );
 }
